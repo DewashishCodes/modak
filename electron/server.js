@@ -1,7 +1,7 @@
 const http = require('node:http')
 const path = require('node:path')
 const crypto = require('node:crypto')
-const { describe, detail, clip } = require('./describe')
+const { describe, detail, clip, preview, outputTail, askLine } = require('./describe')
 
 const HOOK_PATH = '/peninsula/hook'
 const MAX_BODY = 1024 * 1024
@@ -40,7 +40,7 @@ function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
   function touch(ev) {
     let s = sessions.get(ev.session_id)
     if (!s) {
-      s = { id: ev.session_id, cwd: ev.cwd || '', status: 'idle', activity: '', lastAnswer: '' }
+      s = { id: ev.session_id, cwd: ev.cwd || '', status: 'idle', activity: '', lastAnswer: '', preview: null }
       sessions.set(s.id, s)
     }
     if (ev.cwd) { s.cwd = ev.cwd; s.folder = path.basename(ev.cwd) }
@@ -72,15 +72,17 @@ function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
       case 'PreToolUse':
         s.status = 'working'
         s.activity = describe(ev.tool_name, ev.tool_input)
+        s.preview = preview(ev.tool_name, ev.tool_input) || s.preview
         break
       case 'PostToolUse':
         releaseSession(s.id) // a held card for this session was answered in the terminal
         s.status = 'working'
+        if (s.preview?.kind === 'term' && ['Bash', 'PowerShell'].includes(ev.tool_name)) s.preview = { ...s.preview, output: outputTail(ev.tool_response) }
         break
       case 'PermissionRequest': {
         releaseSession(s.id) // only one open card per session
         const id = crypto.randomUUID()
-        pending.set(id, { id, sessionId: s.id, folder: s.folder, tool: ev.tool_name, detail: detail(ev.tool_name, ev.tool_input), activity: describe(ev.tool_name, ev.tool_input), createdAt: Date.now(), res })
+        pending.set(id, { id, sessionId: s.id, folder: s.folder, tool: ev.tool_name, detail: detail(ev.tool_name, ev.tool_input), ask: askLine(ev.tool_name, ev.tool_input), preview: preview(ev.tool_name, ev.tool_input), activity: describe(ev.tool_name, ev.tool_input), createdAt: Date.now(), res })
         res.on('close', () => { if (pending.delete(id)) changed() }) // Claude gave up or timed out
         s.status = 'asking'
         s.activity = `Wants to use ${ev.tool_name}`
@@ -98,6 +100,7 @@ function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
         s.status = 'done'
         s.activity = 'Done'
         s.lastAnswer = clip(String(ev.last_assistant_message || ''), 600)
+        s.preview = { kind: 'answer', text: s.lastAnswer }
         onSignal({ type: 'done', sessionId: s.id })
         break
       default:

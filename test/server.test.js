@@ -30,10 +30,24 @@ test('tool events update session activity and return empty 200', async () => {
   assert.equal(last.sessions[0].status, 'working')
 })
 
+test('Edit shows a diff preview, Bash shows command then output tail, Stop shows the answer', async () => {
+  await post(ev('PreToolUse', { tool_name: 'Edit', tool_input: { file_path: 'C:/x/checkout.ts', old_string: 'const total = 0', new_string: 'const total = sum(items)' } }))
+  assert.deepEqual(last.sessions[0].preview, { kind: 'diff', file: 'checkout.ts', lines: [['-', 'const total = 0'], ['+', 'const total = sum(items)']] })
+  await post(ev('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'npm test' } }))
+  assert.deepEqual(last.sessions[0].preview, { kind: 'term', command: 'npm test', output: [] })
+  await post(ev('PostToolUse', { tool_name: 'Bash', tool_response: { stdout: 'a\n\nb\nok 15 passing\n', stderr: '' } }))
+  assert.deepEqual(last.sessions[0].preview.output, ['a', 'b', 'ok 15 passing'])
+  await post(ev('PreToolUse', { tool_name: 'Read', tool_input: { file_path: 'x.ts' } }))
+  assert.equal(last.sessions[0].preview.kind, 'term') // Read keeps the last preview
+  await post(ev('Stop', { last_assistant_message: 'Shipped.' }))
+  assert.deepEqual(last.sessions[0].preview, { kind: 'answer', text: 'Shipped.' })
+})
+
 test('PermissionRequest is held until allow, then returns the decision JSON', async () => {
   const p = post(ev('PermissionRequest', { tool_name: 'Bash', tool_input: { command: 'rm -rf build' } }))
   await waitFor(() => last?.approvals.length === 1)
   assert.equal(last.approvals[0].detail, 'rm -rf build')
+  assert.equal(last.approvals[0].ask, 'rm -rf build')
   assert.equal(last.sessions[0].status, 'asking')
   srv.decide(last.approvals[0].id, 'allow')
   const body = await (await p).json()
