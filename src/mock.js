@@ -18,7 +18,7 @@ if (!window.peninsula) {
     onState: () => () => {},
     onSignal: (cb) => { subs.signal.push(cb); return () => {} },
     decide: (id, b) => console.log('decide', id, b),
-    widgets: async () => ({ sys: { cpu: 23, ram: 61, ramUsedGb: 9.7, ramTotalGb: 16 }, git: { branch: 'feat/checkout', changed: 3, subject: 'wire tax', when: '12 minutes ago' }, usage: { output: 259266, total: 62353005, messages: 261 } }),
+    widgets: async () => ({ sys: { cpu: 23, ram: 61, ramUsedGb: 9.7, ramTotalGb: 16 }, git: { branch: 'feat/checkout', changed: 4, added: 1, modified: 2, deleted: 1, subject: 'wire tax', when: '12 minutes ago' }, usage: { output: 259266, total: 62353005, messages: 261, hours: [0,0,0,0,0,0,0,0,0,2000,9000,14000,30000,52000,41000,22000,36000,48000,5000,0,0,0,0,0] } }),
     onMedia: (cb) => { setTimeout(() => cb({ playing: true, title: 'Blinding Lights', artist: 'The Weeknd', app: 'Spotify.exe' }), 50); return () => {} },
     media: (a) => console.log('media', a),
     getSettings: async () => ({ connected: true, autostart: false, sound: true }),
