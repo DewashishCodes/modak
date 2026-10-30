@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Play, Pause, Next, Prev, Branch, Chip, Spark, Music } from './icons.jsx'
+import { motion, AnimatePresence } from 'motion/react'
+import { Play, Pause, Branch, Chip, Spark, Image, Reset } from './icons.jsx'
 import { mmss } from './focus.js'
 
 const api = window.peninsula
 const fmtTokens = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n))
-
-// "Spotify.exe" or "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify" -> "Spotify"
-const appName = (id = '') => {
-  const s = id.split('!').pop().replace(/\.exe$/i, '').split('.').pop().replace(/_.*/, '')
-  return s.toLowerCase() === 'msedge' ? 'Edge' : s ? s[0].toUpperCase() + s.slice(1) : 'Media'
-}
 
 // Colored rounded square holding a white icon, like an app icon.
 export const IconSquare = ({ color, children }) => <span className="isq" style={{ background: color }}>{children}</span>
@@ -21,46 +16,55 @@ export function Ring({ value = 0, size = 56, stroke = 6, color = '#8fb4ff', trac
     <div className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size}>
         <circle cx={size / 2} cy={size / 2} r={r} stroke={track} strokeWidth={stroke} fill="none" />
-        <circle
+        {value > 0 && <circle
           cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, Math.max(0, value)))}
           style={{ transition: 'stroke-dashoffset 0.6s ease', transform: 'rotate(-90deg)', transformOrigin: 'center' }}
-        />
+        />}
       </svg>
       <div className="ring-inner">{children}</div>
     </div>
   )
 }
 
-const Equalizer = ({ on }) => (
-  <span className={`eq ${on ? 'on' : ''}`} aria-hidden="true"><i /><i /><i /><i /></span>
-)
+const SLIDE_MS = 6000
+let slideIndex = 0 // survives the dashboard closing, so the show continues where it was
 
-export function NowPlaying() {
-  const [m, setM] = useState(null)
-  useEffect(() => api?.onMedia(setM), [])
-  const has = m?.title
+// Your favourite photos, crossfading with a slow zoom. Click for the next one.
+export function Photos() {
+  const [photos, setPhotos] = useState(null)
+  const [i, setI] = useState(slideIndex)
+  useEffect(() => { api?.photos().then(setPhotos) }, [])
+  useEffect(() => {
+    if (!photos?.length) return
+    const t = setInterval(() => setI((n) => (slideIndex = (n + 1) % photos.length)), SLIDE_MS)
+    return () => clearInterval(t)
+  }, [photos])
+
+  if (photos && !photos.length) {
+    return (
+      <button className="tile photos empty" onClick={() => api?.openPhotos()}>
+        <IconSquare color="#f59e0b"><Image size={15} /></IconSquare>
+        <b>Add your favourite photos</b>
+        <span className="tile-sub">Click, then drop images in the folder that opens</span>
+      </button>
+    )
+  }
+  const n = photos?.length || 0
+  const cur = n ? photos[i % n] : null
   return (
-    <div className="tile small media">
-      {m?.art && <div className="media-bg" style={{ backgroundImage: `url(${m.art})` }} />}
-      <div className="media-top">
-        {m?.art ? <img className="art" src={m.art} alt="" /> : <IconSquare color="#1db954"><Music size={15} /></IconSquare>}
-        <div className="media-text">
-          <div className="tile-main clip" title={has ? `${m.title} · ${m.artist}` : ''}>{has ? m.title : 'Nothing playing'}</div>
-          <div className="tile-sub clip">{has ? m.artist || appName(m.app) : 'Play music in any app'}</div>
-        </div>
-      </div>
-      {has && (
-        <div className="media-bottom">
-          <Equalizer on={m.playing} />
-          <span className="media-btns">
-            <button onClick={() => api.media('prev')} aria-label="Previous"><Prev size={13} /></button>
-            <button className="main" onClick={() => api.media('toggle')} aria-label={m.playing ? 'Pause' : 'Play'}>{m.playing ? <Pause size={13} /> : <Play size={13} />}</button>
-            <button onClick={() => api.media('next')} aria-label="Next"><Next size={13} /></button>
-          </span>
-        </div>
+    <button className="tile photos" onClick={() => n && setI((x) => (slideIndex = (x + 1) % n))} aria-label="Next photo">
+      <AnimatePresence initial={false}>
+        {cur && (
+          <motion.img key={cur} src={cur} alt="" className="slide" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9 }} />
+        )}
+      </AnimatePresence>
+      {n > 1 && (
+        <span className="slide-dots">
+          {n <= 8 ? photos.map((p, k) => <i key={p} className={k === i % n ? 'on' : ''} />) : <em>{(i % n) + 1} / {n}</em>}
+        </span>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -88,7 +92,7 @@ export function Clock() {
   const [now, setNow] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
   return (
-    <div className="tile small row-tile">
+    <div className="tile small row-tile clock">
       <AnalogClock now={now} />
       <div>
         <div className="tile-big">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
@@ -98,76 +102,120 @@ export function Clock() {
   )
 }
 
-// Click to start or pause, double click to reset. State comes from useFocus in App.
+// The ring starts and pauses; the reset button goes back to 25:00. State comes from useFocus in App.
 export function Focus({ focus }) {
   const { left, running, toggle, reset, progress } = focus
   return (
-    <button className={`tile small row-tile focus ${running ? 'on' : ''}`} onClick={toggle} onDoubleClick={reset} title="Click to start or pause, double click to reset">
-      <Ring value={progress} size={54} stroke={5} color="#ff9f43">
-        {running ? <Pause size={14} /> : <Play size={14} />}
-      </Ring>
-      <div>
+    <div className={`tile small row-tile focus ${running ? 'on' : ''}`}>
+      <button className="ring-btn" onClick={toggle} aria-label={running ? 'Pause focus timer' : 'Start focus timer'}>
+        <Ring value={progress} size={54} stroke={5} color="#ff9f43">
+          {running ? <Pause size={14} /> : <Play size={14} />}
+        </Ring>
+      </button>
+      <div className="focus-text">
         <div className="tile-big">{mmss(left)}</div>
         <div className="tile-sub">{running ? 'Focusing' : progress > 0 ? 'Paused' : 'Focus · 25 min'}</div>
       </div>
-    </button>
-  )
-}
-
-export function Git({ git }) {
-  return (
-    <div className="tile small">
-      <div className="tile-head">
-        <IconSquare color="#8b5cf6"><Branch size={15} /></IconSquare>
-        <div className="clip">
-          <div className="tile-main clip">{git ? git.branch : 'Not a repo'}</div>
-          <div className="tile-sub clip" title={git?.subject}>{git ? git.when || 'no commits yet' : 'for this session'}</div>
-        </div>
-      </div>
-      {git && (
-        <div className="chips">
-          {git.changed === 0 && <span className="chip clean">✓ clean</span>}
-          {git.added > 0 && <span className="chip add">+{git.added}</span>}
-          {git.modified > 0 && <span className="chip mod">~{git.modified}</span>}
-          {git.deleted > 0 && <span className="chip del">−{git.deleted}</span>}
-        </div>
+      {progress > 0 && (
+        <button className="icon-btn reset" onClick={reset} title="Reset to 25:00" aria-label="Reset focus timer"><Reset size={14} /></button>
       )}
     </div>
   )
 }
 
+const MIX = [
+  ['output', 'Output', '#ec4899'],
+  ['input', 'Input', '#f59e0b'],
+  ['cacheWrite', 'Cache write', '#8b5cf6'],
+  ['cacheRead', 'Cache read', '#38bdf8'],
+]
+
 export function Usage({ usage }) {
   const hours = usage?.hours || new Array(24).fill(0)
   const max = Math.max(1, ...hours)
   const nowH = new Date().getHours()
+  const total = usage?.total || 1
   return (
-    <div className="tile small">
-      <div className="tile-head">
-        <IconSquare color="#ec4899"><Spark size={15} /></IconSquare>
-        <div className="clip">
-          <div className="tile-main">{usage ? fmtTokens(usage.output) : '·'} <span className="unit">out today</span></div>
-          <div className="tile-sub">{usage ? `${usage.messages} replies` : 'Reading usage…'}</div>
+    <div className="tile wide usage">
+      <div className="usage-left">
+        <div className="tile-head">
+          <IconSquare color="#ec4899"><Spark size={15} /></IconSquare>
+          <div>
+            <div className="tile-big">{usage ? fmtTokens(usage.output) : '·'}<span className="unit"> out today</span></div>
+            <div className="tile-sub">{usage ? `${usage.messages} replies · ${fmtTokens(usage.total)} processed` : 'Reading usage…'}</div>
+          </div>
+        </div>
+        <div className="mix-bar" aria-hidden="true">
+          {MIX.map(([k, , c]) => <i key={k} style={{ flexGrow: usage ? Math.max(usage[k], total * 0.015) : 1, background: c }} />)}
+        </div>
+        <div className="mix-legend">
+          {MIX.map(([k, label, c]) => (
+            <span key={k}><i style={{ background: c }} />{label} <b>{usage ? fmtTokens(usage[k]) : '·'}</b></span>
+          ))}
         </div>
       </div>
-      <div className="spark" aria-label="Output tokens per hour today">
-        {hours.map((v, h) => (
-          <i key={h} className={h === nowH ? 'now' : h > nowH ? 'future' : ''} style={{ height: `${Math.max(8, (100 * v) / max)}%` }} />
-        ))}
+      <div className="chart">
+        <div className="spark" aria-label="Output tokens per hour today">
+          {hours.map((v, h) => (
+            <i key={h} title={`${h}:00 · ${fmtTokens(v)}`} className={h === nowH ? 'now' : h > nowH ? 'future' : ''} style={{ height: `${Math.max(5, (100 * v) / max)}%` }} />
+          ))}
+        </div>
+        <div className="axis"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>
       </div>
+    </div>
+  )
+}
+
+export function Git({ git }) {
+  if (!git) {
+    return (
+      <div className="tile wide git">
+        <div className="tile-head">
+          <IconSquare color="#8b5cf6"><Branch size={15} /></IconSquare>
+          <div><div className="tile-main">Not a git repo</div><div className="tile-sub">This session's folder has no repository</div></div>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="tile wide git">
+      <div className="tile-head">
+        <IconSquare color="#8b5cf6"><Branch size={15} /></IconSquare>
+        <div className="clip">
+          <div className="tile-main clip">{git.branch}</div>
+          <div className="git-badges">
+            {git.ahead > 0 && <span className="badge up">↑ {git.ahead}</span>}
+            {git.behind > 0 && <span className="badge down">↓ {git.behind}</span>}
+            {git.ahead === 0 && git.behind === 0 && <span className="badge">in sync</span>}
+            {git.ahead === null && <span className="badge">local only</span>}
+            {git.changed === 0 && <span className="chip clean">✓ clean</span>}
+            {git.added > 0 && <span className="chip add">+{git.added}</span>}
+            {git.modified > 0 && <span className="chip mod">~{git.modified}</span>}
+            {git.deleted > 0 && <span className="chip del">−{git.deleted}</span>}
+          </div>
+        </div>
+      </div>
+      <div className="git-files">
+        {git.files.map((f) => (
+          <div key={f.path} className="git-file clip"><span className={`fk ${f.kind}`}>{f.kind === 'add' ? 'A' : f.kind === 'del' ? 'D' : 'M'}</span>{f.path}</div>
+        ))}
+        {git.changed > git.files.length && <div className="git-file more">+{git.changed - git.files.length} more</div>}
+      </div>
+      <div className="git-commit clip" title={git.subject}><span className="commit-dot" />{git.subject || 'No commits yet'} <span className="muted">· {git.author} · {git.when}</span></div>
     </div>
   )
 }
 
 export function System({ sys }) {
   return (
-    <div className="tile small system">
+    <div className="tile system">
       <div className="gauge">
-        <Ring value={(sys?.cpu || 0) / 100} size={52} stroke={5} color="#38bdf8"><b>{sys ? sys.cpu : '·'}</b><small>%</small></Ring>
+        <Ring value={(sys?.cpu || 0) / 100} size={58} stroke={6} color="#38bdf8"><b>{sys ? sys.cpu : '·'}</b><small>%</small></Ring>
         <span><Chip size={11} /> CPU</span>
       </div>
       <div className="gauge">
-        <Ring value={(sys?.ram || 0) / 100} size={52} stroke={5} color="#a78bfa"><b>{sys ? sys.ramUsedGb : '·'}</b><small>G</small></Ring>
-        <span>RAM</span>
+        <Ring value={(sys?.ram || 0) / 100} size={58} stroke={6} color="#a78bfa"><b>{sys ? sys.ram : '·'}</b><small>%</small></Ring>
+        <span>RAM {sys ? `${sys.ramUsedGb} of ${sys.ramTotalGb} GB` : ''}</span>
       </div>
     </div>
   )
@@ -187,6 +235,13 @@ export function Settings({ settings, onChange }) {
       <Toggle label="Connected to Claude Code" hint="Peninsula's hooks in ~/.claude/settings.json" on={settings.connected} onChange={(v) => onChange('connected', v)} />
       <Toggle label="Sound" hint="Chime when work is done" on={settings.sound} onChange={(v) => onChange('sound', v)} />
       <Toggle label="Start with Windows" hint="Open Peninsula when you sign in" on={settings.autostart} onChange={(v) => onChange('autostart', v)} />
+      <div className="setting">
+        <span className="clip"><b>Photos folder</b><small className="clip">{settings.photosDir}</small></span>
+        <span className="setting-actions">
+          <button className="link" onClick={() => api?.openPhotos()}>Open</button>
+          <button className="link" onClick={() => onChange('photosDir')}>Change</button>
+        </span>
+      </div>
       <div className="setting-tip">Tips: hold <kbd>Shift</kbd> over Peninsula to click what is behind it. While an approval waits, <kbd>Ctrl+Alt+Y</kbd> allows and <kbd>Ctrl+Alt+N</kbd> denies.</div>
     </div>
   )
