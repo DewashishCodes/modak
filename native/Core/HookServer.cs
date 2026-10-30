@@ -15,6 +15,7 @@ public sealed class HookServer(Hub hub) : IDisposable
     readonly CancellationTokenSource stop = new();
 
     public int Port { get; private set; }
+    public Action<Exception>? OnError { get; set; } // our bugs: logged, never passed on to the agent
 
     public int Listen(int port)
     {
@@ -60,7 +61,7 @@ public sealed class HookServer(Hub hub) : IDisposable
             Task<string?> reply;
             string? approvalId;
             try { reply = hub.Handle(ev, out approvalId); }
-            catch { await Send(stream, 200); return; } // our bug must never block the agent
+            catch (Exception x) { OnError?.Invoke(x); await Send(stream, 200); return; } // our bug must never block the agent
 
             if (approvalId != null)
             {

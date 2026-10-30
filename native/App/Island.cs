@@ -1,198 +1,273 @@
-using System;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
-using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
-using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 
 namespace Modak;
 
-public static class Program
+// One thing the island can show: the notch, a bar or the dashboard. Update refreshes it from the island's state.
+interface IView
 {
-    [STAThread]
-    static void Main(string[] args)
-    {
-        WinRT.ComWrappersSupport.InitializeComWrappers();
-        Application.Start(_ =>
-        {
-            System.Threading.SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));
-            new App(Array.IndexOf(args, "--demo") >= 0, Array.IndexOf(args, "--second") >= 0);
-        });
-    }
+    FrameworkElement Root { get; }
+    void Update();
 }
 
-public class App(bool demo, bool second) : Application
+// The island: a fixed transparent window at the top of the screen. The pill is a composition shape whose size
+// runs on a spring inside the Windows compositor, so the app's own thread does no work per frame. The window
+// only exists (for drawing and for clicks) inside a region around the pill; clicks elsewhere reach the apps below.
+public sealed partial class Island : Window
 {
-    Island? island;
-    protected override void OnLaunched(LaunchActivatedEventArgs e) => island = new Island(demo, second);
-}
-
-// The island: a fixed transparent window at the top of the screen. The pill is a composition shape whose
-// size runs on a spring inside the Windows compositor, so the app's own thread does no work per frame.
-public sealed class Island : Window
-{
-    const float WinW = 1100, WinH = 480; // wider than the dashboard plus its shadow, so the region never reaches the edges
-    static readonly Vector2 Notch = new(76, 32), Dash = new(980, 380);
+    const float WinW = 1100, WinH = 560; // wider and taller than the dashboard plus its shadow, so the region never reaches the edges
     const float Hidden = 24; // the shape starts above the screen edge so only its bottom corners show
-    const int HoverOpenMs = 140;
-    const float PadOpen = 40, PadNotch = 12; // room for the shadow inside the window region
-    const int SettleMs = 500; // the close spring is done by then, so the region can shrink
     const int Edge = 10; // px the window sits above the screen; Windows' frame line lives in that strip
+    const float PadOpen = 40, PadSmall = 14; // room for the shadow inside the region
+    const int SettleMs = 500; // a shrinking spring is done by then, so the region can shrink too
+    const int HoverOpenMs = 140; // passing the mouse over the top edge should not pop the dashboard open
+    const int DoneFlashMs = 5000;
+    public const int Port = 47821; // shortcut: fixed port, make it configurable if anyone hits a clash
+    public static readonly string HookUrl = $"http://127.0.0.1:{Port}{Hub.HookPath}";
 
     readonly Compositor comp;
     readonly CompositionRoundedRectangleGeometry pill;
-    readonly Visual dashVisual, notchVisual;
-    readonly DispatcherQueueTimer shrink;
+    readonly CompositionColorGradientStop rimStop;
+    readonly Grid stage;
     readonly IntPtr hwnd;
     readonly float scale;
     readonly PointInt32 origin;
-    bool open;
+    readonly DispatcherQueueTimer shrink, flashTimer;
+    readonly DispatcherQueue ui; // captured on the UI thread: Window.DispatcherQueue throws when read from a server thread
+
+    public readonly Hub Hub = new();
+    readonly HookServer server;
+    public Prefs Prefs { get; private set; } = Prefs.Load();
+    public readonly FocusTimer Focus = new();
+    public Snapshot State { get; private set; } = new([], []);
+    string? flash; // session that just finished
+    bool hover, ghost;
     int overMs;
+    public string Page { get; set; } = "grid"; // grid | settings
+    public int Index { get; set; }
+    public int Love { get; private set; } // bumps when the user allows, for the mascot's heart eyes
+
+    IView? current;
+    string currentKey = "";
+    Vector2 size;
 
     // second: open on a non-primary display, so test runs stay out of the way of the main screen.
-    public Island(bool demo, bool second)
+    public Island(bool second, int port)
     {
         hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        ui = DispatcherQueue;
         SystemBackdrop = new TransparentBackdrop();
         var p = OverlappedPresenter.Create();
         p.SetBorderAndTitleBar(false, false);
         p.IsResizable = p.IsMaximizable = p.IsMinimizable = false;
         AppWindow.SetPresenter(p);
         AppWindow.IsShownInSwitchers = false;
+        AppWindow.Title = "Modak";
 
         scale = Native.GetDpiForWindow(hwnd) / 96f;
         var display = DisplayArea.Primary;
         var all = DisplayArea.FindAll(); // indexed, not enumerated: enumerating this WinRT list throws
         for (int i = 0; second && i < all.Count; i++) if (all[i].DisplayId.Value != display.DisplayId.Value) { display = all[i]; break; }
-        var screen = display.OuterBounds; // screen edge, not work area, like the Electron build
+        var screen = display.OuterBounds; // screen edge, not work area, so the pill joins the edge even with a top taskbar
         int w = (int)(WinW * scale), h = (int)(WinH * scale);
-        // Slightly above the screen: Windows draws a thin line along the window edge, the region starts below it.
         origin = new PointInt32(screen.X + (screen.Width - w) / 2, screen.Y - Edge);
         AppWindow.MoveAndResize(new RectInt32(origin.X, origin.Y, w, h));
 
         var root = new Grid { Margin = new Thickness(0, Edge / scale, 0, 0) }; // content starts at the screen edge
         var host = new Grid();
-        var notch = new TextBlock { Text = "\U0001F95F", FontSize = 18, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 0, 0) };
-        var dash = Dashboard.Build(Dash);
+        stage = new Grid();
         root.Children.Add(host);
-        root.Children.Add(notch);
-        root.Children.Add(dash);
+        root.Children.Add(stage);
         Content = root;
 
         comp = ElementCompositionPreview.GetElementVisual(root).Compositor;
         pill = comp.CreateRoundedRectangleGeometry();
-        pill.Size = Notch + new Vector2(0, Hidden);
         pill.CornerRadius = new Vector2(16);
-        // Keep the pill centred while its size springs: the offset follows the size inside the compositor too.
-        var centre = comp.CreateExpressionAnimation("Vector2((W - g.Size.X) / 2, -H)");
-        centre.SetReferenceParameter("g", pill);
-        centre.SetScalarParameter("W", WinW);
-        centre.SetScalarParameter("H", Hidden);
-        pill.StartAnimation("Offset", centre);
+        // The pill stays centred while its size springs: the offset follows the size inside the compositor too.
+        Follow(pill, "Offset", "Vector2((W - g.Size.X) / 2, -H)");
 
-        var shape = comp.CreateSpriteShape(pill);
-        shape.FillBrush = comp.CreateColorBrush(ColorHelper.FromArgb(255, 11, 11, 13));
+        var fill = comp.CreateColorBrush(Ui.Bg);
         var shapes = comp.CreateShapeVisual();
         shapes.Size = new Vector2(WinW, WinH);
+        var shape = comp.CreateSpriteShape(pill);
+        shape.FillBrush = fill;
         shapes.Shapes.Add(shape);
+
         // A LayerVisual shadow renders nothing in this window, so a plain rectangle tucked inside the rounded
-        // pill casts it instead; the blur hides its square corners. It follows the spring like everything else.
+        // pill casts it instead; the blur hides its square corners.
         var caster = comp.CreateSpriteVisual();
-        caster.Brush = shape.FillBrush;
-        var casterSize = comp.CreateExpressionAnimation("Vector2(g.Size.X - 2 * g.CornerRadius.X, g.Size.Y - H - g.CornerRadius.X)");
-        casterSize.SetReferenceParameter("g", pill);
-        casterSize.SetScalarParameter("H", Hidden);
-        caster.StartAnimation("Size", casterSize);
-        var casterAt = comp.CreateExpressionAnimation("Vector3((W - g.Size.X) / 2 + g.CornerRadius.X, 0, 0)");
-        casterAt.SetReferenceParameter("g", pill);
-        casterAt.SetScalarParameter("W", WinW);
-        caster.StartAnimation("Offset", casterAt);
+        caster.Brush = fill;
+        Follow(caster, "Size", "Vector2(g.Size.X - 2 * g.CornerRadius.X, g.Size.Y - H - g.CornerRadius.X)");
+        Follow(caster, "Offset", "Vector3((W - g.Size.X) / 2 + g.CornerRadius.X, 0, 0)");
         var shadow = comp.CreateDropShadow();
         shadow.BlurRadius = 30;
         shadow.Offset = new Vector3(0, 10, 0);
-        shadow.Color = ColorHelper.FromArgb(115, 0, 0, 0);
+        shadow.Color = Ui.Hex("#000000", 0.45);
         caster.Shadow = shadow;
+
+        // Faint state-coloured rim along the bottom edge, like light leaking out.
+        var rim = comp.CreateSpriteVisual();
+        var gradient = comp.CreateLinearGradientBrush();
+        gradient.StartPoint = new Vector2(0, 0.5f);
+        gradient.EndPoint = new Vector2(1, 0.5f);
+        gradient.ColorStops.Add(comp.CreateColorGradientStop(0, Colors.Transparent));
+        rimStop = comp.CreateColorGradientStop(0.5f, Colors.Transparent);
+        gradient.ColorStops.Add(rimStop);
+        gradient.ColorStops.Add(comp.CreateColorGradientStop(1, Colors.Transparent));
+        rim.Brush = gradient;
+        Follow(rim, "Size", "Vector2(g.Size.X * 0.76, 1)");
+        Follow(rim, "Offset", "Vector3((W - g.Size.X * 0.76) / 2, g.Size.Y - H - 1, 0)");
+
         var pillVisual = comp.CreateContainerVisual();
         pillVisual.Children.InsertAtTop(caster);
         pillVisual.Children.InsertAtTop(shapes);
+        pillVisual.Children.InsertAtTop(rim);
         ElementCompositionPreview.SetElementChildVisual(host, pillVisual);
 
-        // The dashboard is clipped by the same springing shape, so it is revealed, never resized.
-        dashVisual = ElementCompositionPreview.GetElementVisual(dash);
+        // Views are clipped by the same springing shape, so they are revealed, never resized.
         var clipGeo = comp.CreateRoundedRectangleGeometry();
-        var follow = comp.CreateExpressionAnimation("g.Size");
-        follow.SetReferenceParameter("g", pill);
-        clipGeo.StartAnimation("Size", follow);
-        var follow2 = comp.CreateExpressionAnimation("Vector2((D - g.Size.X) / 2, -H)");
-        follow2.SetReferenceParameter("g", pill);
-        follow2.SetScalarParameter("D", Dash.X);
-        follow2.SetScalarParameter("H", Hidden);
-        clipGeo.StartAnimation("Offset", follow2);
-        var follow3 = comp.CreateExpressionAnimation("g.CornerRadius");
-        follow3.SetReferenceParameter("g", pill);
-        clipGeo.StartAnimation("CornerRadius", follow3);
-        dashVisual.Clip = comp.CreateGeometricClip(clipGeo);
-        dashVisual.Opacity = 0;
-        notchVisual = ElementCompositionPreview.GetElementVisual(notch);
+        Follow(clipGeo, "Size", "g.Size");
+        Follow(clipGeo, "Offset", "g.Offset");
+        Follow(clipGeo, "CornerRadius", "g.CornerRadius");
+        ElementCompositionPreview.GetElementVisual(stage).Clip = comp.CreateGeometricClip(clipGeo);
 
         AppWindow.Show(false); // never take focus: typing in a terminal must not land here
         p.IsAlwaysOnTop = true; // after Show: set before, it is lost on a window that never activates
         Native.Chrome(hwnd); // after Show too, the presenter resets the frame when it shows the window
-        Region(Notch, PadNotch);
-        shrink = DispatcherQueue.CreateTimer();
-        shrink.IsRepeating = false;
-        shrink.Interval = TimeSpan.FromMilliseconds(SettleMs);
-        shrink.Tick += (_, _) => Region(Notch, PadNotch);
 
-        var timer = DispatcherQueue.CreateTimer();
-        timer.Interval = TimeSpan.FromMilliseconds(33);
-        timer.Tick += demo ? DemoTick : HoverTick;
-        if (demo) timer.Interval = TimeSpan.FromMilliseconds(1500);
-        timer.Start();
+        shrink = Timer(SettleMs, false, () => Region(size, PadFor(size)));
+        flashTimer = Timer(DoneFlashMs, false, () => { flash = null; Render(); });
+        Timer(33, true, HoverTick);
+        Timer(250, true, SlowTick);
+
+        server = new HookServer(Hub) { OnError = CrashLog.Write };
+        Hub.Changed += s => { CrashLog.Trace($"hub changed: {s.Sessions.Count} sessions, {s.Approvals.Count} approvals"); OnUi(() => { State = s; Render(); }); };
+        Hub.Done += id => OnUi(() => OnDone(id));
+        try { server.Listen(port); }
+        catch (Exception err) { Dialogs.Error($"Port {port} is already in use, so Modak cannot hear Claude Code.\nIs another copy running?\n\n{err.Message}"); }
+
+        Closed += (_, _) => server.Dispose(); // open approvals go back to the terminal prompt
+        Render();
     }
 
-    // The window only exists inside this rectangle, for drawing and for clicks: everywhere else clicks reach
-    // the apps underneath. Layered click-through would be simpler but makes the window opaque black.
-    void Region(Vector2 size, float pad)
+    // Hub events come from server threads; an error in the UI must be logged, not lost or fatal.
+    void OnUi(Action a) => ui.TryEnqueue(() => { try { a(); } catch (Exception x) { CrashLog.Write(x); } });
+
+    void Follow(CompositionObject target, string property, string expression)
     {
-        float l = (WinW - size.X) / 2 - pad;
-        Native.Region(hwnd, (int)(l * scale), Edge, (int)((l + size.X + 2 * pad) * scale), (int)((size.Y + pad) * scale));
+        var e = comp.CreateExpressionAnimation(expression);
+        e.SetReferenceParameter("g", pill);
+        e.SetScalarParameter("W", WinW);
+        e.SetScalarParameter("H", Hidden);
+        target.StartAnimation(property, e);
     }
 
-    void DemoTick(DispatcherQueueTimer t, object o) => SetOpen(!open);
-
-    // shortcut: polls the cursor 30 times a second (tiny cost), use a mouse hook if this ever shows up in a profile
-    void HoverTick(DispatcherQueueTimer t, object o)
+    DispatcherQueueTimer Timer(int ms, bool repeat, Action tick)
     {
-        Native.GetCursorPos(out var pt);
-        float x = (pt.X - origin.X) / scale, y = (pt.Y - origin.Y) / scale;
-        var size = open ? Dash : Notch;
-        bool over = y >= 0 && y <= size.Y && MathF.Abs(x - WinW / 2) <= size.X / 2;
-        overMs = over ? overMs + 33 : 0;
-        if (!open && overMs >= HoverOpenMs) SetOpen(true);
-        else if (open && !over) SetOpen(false);
+        var t = DispatcherQueue.CreateTimer();
+        t.Interval = TimeSpan.FromMilliseconds(ms);
+        t.IsRepeating = repeat;
+        t.Tick += (_, _) => tick();
+        if (repeat) t.Start();
+        return t;
     }
 
-    void SetOpen(bool value)
+    // ---------- state the views read ----------
+
+    public Approval? Approval => State.Approvals.FirstOrDefault();
+    public Session? Flashed => flash == null ? null : State.Sessions.FirstOrDefault(s => s.Id == flash);
+    public int SessionIndex => Math.Min(Index, Math.Max(0, State.Sessions.Count - 1));
+    public Session? Selected => State.Sessions.ElementAtOrDefault(SessionIndex);
+    public Session? Primary => (Approval is { } a ? State.Sessions.FirstOrDefault(s => s.Id == a.SessionId) : null) ?? Flashed ?? Selected;
+    public string Status => Approval != null ? "asking" : Flashed != null ? "done" : Primary?.Status is "done" or null ? "idle" : Primary.Status;
+
+    string View => ghost ? "notch" : Approval != null ? "approval" : hover ? "dashboard" : Flashed != null ? "done" : "notch";
+
+    // ---------- rendering ----------
+
+    public void Render()
     {
-        open = value;
-        shrink.Stop();
-        if (value) Region(Dash, PadOpen); // grow first so the opening spring is never cut off
-        else shrink.Start();
-        var target = (value ? Dash : Notch) + new Vector2(0, Hidden);
-        pill.StartAnimation("Size", Spring(target));
+        var view = View;
+        var key = view switch { "approval" => "approval" + Approval!.Id, "dashboard" => "dashboard-" + Page, "notch" => Focus.Running ? "notch-focus" : "notch", _ => view };
+        Glow(Status);
+        CrashLog.Trace($"render {key} (was {currentKey}) sessions={State.Sessions.Count} approvals={State.Approvals.Count}");
+        if (key != currentKey)
+        {
+            currentKey = key;
+            Swap(view switch
+            {
+                "approval" => new ApprovalBar(this, Approval!),
+                "done" => new DoneBar(this, Flashed!),
+                "dashboard" => Page == "settings" ? new SettingsView(this) : new Dashboard(this),
+                _ => new NotchView(this),
+            });
+        }
+        else current?.Update();
+    }
+
+    void Swap(IView next)
+    {
+        if (current is { } old)
+        {
+            var v = ElementCompositionPreview.GetElementVisual(old.Root);
+            var batch = comp.CreateScopedBatch(CompositionBatchTypes.Animation);
+            v.StartAnimation("Opacity", Fade(0, 100, 0));
+            batch.End();
+            batch.Completed += (_, _) => stage.Children.Remove(old.Root);
+        }
+        current = next;
+        next.Root.HorizontalAlignment = HorizontalAlignment.Center;
+        next.Root.VerticalAlignment = VerticalAlignment.Top;
+        stage.Children.Add(next.Root);
+        var nv = ElementCompositionPreview.GetElementVisual(next.Root);
+        nv.Opacity = 0;
+        nv.StartAnimation("Opacity", Fade(1, 220, 60));
+        Resize();
+    }
+
+    // Springs the pill to fit the current view; views call this when their own height changes.
+    public void Resize()
+    {
+        if (current == null) return;
+        current.Root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var d = current.Root.DesiredSize;
+        var target = new Vector2((float)d.Width, (float)d.Height);
+        bool notch = current is NotchView;
+        var radius = notch ? 16 : 24;
+        bool grows = target.X > size.X || target.Y > size.Y;
+        size = target;
+        pill.StartAnimation("Size", Spring(target + new Vector2(0, Hidden)));
         var r = comp.CreateSpringVector2Animation();
-        r.FinalValue = new Vector2(value ? 24 : 16);
+        r.FinalValue = new Vector2(radius);
         pill.StartAnimation("CornerRadius", r);
-        dashVisual.StartAnimation("Opacity", Fade(value ? 1 : 0, value ? 220 : 100, value ? 60 : 0));
-        notchVisual.StartAnimation("Opacity", Fade(value ? 0 : 1, value ? 80 : 200, value ? 0 : 120));
+        shrink.Stop();
+        if (grows) Region(target, PadFor(target)); // grow first so the spring is never cut off
+        else shrink.Start();
+    }
+
+    static float PadFor(Vector2 s) => s.Y > 100 ? PadOpen : PadSmall;
+
+    void Region(Vector2 s, float pad)
+    {
+        if (ghost) { Native.Region(hwnd, 0, 0, 0, 0); return; } // Shift held: nothing to click or see
+        float l = (WinW - s.X) / 2 - pad;
+        Native.Region(hwnd, (int)(l * scale), Edge, (int)((l + s.X + 2 * pad) * scale), Edge + (int)((s.Y + pad) * scale));
+    }
+
+    void Glow(string status)
+    {
+        var c = status switch { "working" => Ui.Hex("#ff9f43", 0.65), "asking" => Ui.Hex("#ffcf6e", 0.7), "done" => Ui.Hex("#4ade80", 0.65), _ => Colors.Transparent };
+        var a = comp.CreateColorKeyFrameAnimation();
+        a.InsertKeyFrame(1, c);
+        a.Duration = TimeSpan.FromMilliseconds(400);
+        rimStop.StartAnimation("Color", a);
     }
 
     // Damping ratio from the Electron spring (stiffness 420, damping 32); the period is tuned by eye.
@@ -213,84 +288,65 @@ public sealed class Island : Window
         a.DelayTime = TimeSpan.FromMilliseconds(delayMs);
         return a;
     }
-}
 
-// Placeholder dashboard with roughly the real one's amount of content, to see what it costs.
-static class Dashboard
-{
-    public static FrameworkElement Build(Vector2 size)
+    // ---------- input ----------
+
+    // shortcut: polls the cursor 30 times a second (tiny cost), use a mouse hook if this ever shows up in a profile
+    void HoverTick()
     {
-        var grid = new Grid { Width = size.X, Height = size.Y, Padding = new Thickness(10, 36, 10, 10), ColumnSpacing = 8, RowSpacing = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top };
-        foreach (var w in new[] { 2.0, 1.2, 1, 1 }) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(w, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition());
-        grid.RowDefinitions.Add(new RowDefinition());
-        void Tile(int col, int row, int colSpan, string title, string body)
-        {
-            var t = new Border { Background = new SolidColorBrush(ColorHelper.FromArgb(255, 21, 21, 24)), CornerRadius = new CornerRadius(14), Padding = new Thickness(14) };
-            var s = new StackPanel { Spacing = 4 };
-            s.Children.Add(new TextBlock { Text = title, FontSize = 22, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(Colors.White) });
-            s.Children.Add(new TextBlock { Text = body, FontSize = 12, Foreground = new SolidColorBrush(ColorHelper.FromArgb(255, 150, 150, 160)) });
-            t.Child = s;
-            Grid.SetColumn(t, col); Grid.SetRow(t, row); Grid.SetColumnSpan(t, colSpan);
-            grid.Children.Add(t);
-        }
-        Tile(0, 0, 1, "webshop", "Editing checkout.ts");
-        Tile(1, 0, 1, "Photos", "slideshow");
-        Tile(2, 0, 1, "21:43", "Fri 30 Oct");
-        Tile(3, 0, 1, "25:00", "Focus");
-        Tile(0, 1, 2, "546K out today", "533 replies");
-        Tile(2, 1, 2, "feat/checkout", "6 changed files");
-        return grid;
-    }
-}
+        Native.GetCursorPos(out var pt);
+        float x = (pt.X - origin.X) / scale, y = (pt.Y - origin.Y - Edge) / scale;
+        bool over = y >= 0 && y <= size.Y && MathF.Abs(x - WinW / 2) <= size.X / 2;
+        bool shift = Native.ShiftDown;
 
-// Lets the window be fully transparent: WinUI paints this brush behind the content instead of a solid backdrop.
-sealed class TransparentBackdrop : SystemBackdrop
-{
-    static Windows.UI.Composition.Compositor? system;
-    protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop target, XamlRoot root)
-    {
-        base.OnTargetConnected(target, root);
-        if (Windows.System.DispatcherQueue.GetForCurrentThread() == null) Native.EnsureSystemDispatcher();
-        system ??= new Windows.UI.Composition.Compositor();
-        target.SystemBackdrop = system.CreateColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
-    }
-}
+        // Shift over Modak: it fades away so the user can click whatever is behind it.
+        if (over && shift && !ghost) { SetGhost(true); return; }
+        if (ghost) { if (!shift || !over) SetGhost(false); return; }
 
-static class Native
-{
-    const int GWL_STYLE = -16, GWL_EXSTYLE = -20;
-    const long WS_POPUP = 0x80000000L, WS_VISIBLE = 0x10000000L, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000;
-
-    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
-    [DllImport("user32.dll")] public static extern bool GetCursorPos(out PointInt32 pt);
-    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern long GetWindowLongPtr(IntPtr h, int i);
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern long SetWindowLongPtr(IntPtr h, int i, long v);
-    [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr h, IntPtr region, bool redraw);
-    [DllImport("gdi32.dll")] static extern IntPtr CreateRectRgn(int l, int t, int r, int b);
-    [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int value, int size);
-    [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr h, ref Margins m);
-    struct Margins { public int L, R, T, B; }
-    [DllImport("CoreMessaging.dll")] static extern int CreateDispatcherQueueController(DispatcherQueueOptions o, out IntPtr controller);
-    [StructLayout(LayoutKind.Sequential)] struct DispatcherQueueOptions { public int dwSize, threadType, apartmentType; }
-
-    public static void EnsureSystemDispatcher() =>
-        CreateDispatcherQueueController(new DispatcherQueueOptions { dwSize = Marshal.SizeOf<DispatcherQueueOptions>(), threadType = 2, apartmentType = 2 }, out _);
-
-    // A borderless popup with no taskbar entry that never activates, composited with the content's alpha.
-    public static void Chrome(IntPtr h)
-    {
-        // Style first: changing it resets the DWM frame attributes set below.
-        SetWindowLongPtr(h, GWL_STYLE, WS_POPUP | WS_VISIBLE); // no caption buttons in the extended frame
-        SetWindowLongPtr(h, GWL_EXSTYLE, GetWindowLongPtr(h, GWL_EXSTYLE) | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
-        SetWindowPos(h, IntPtr.Zero, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020); // NOSIZE | NOMOVE | NOZORDER | NOACTIVATE | FRAMECHANGED
-        int round = 1;
-        DwmSetWindowAttribute(h, 33, ref round, 4); // DWMWA_WINDOW_CORNER_PREFERENCE = DONOTROUND
-        var glass = new Margins { L = -1, R = -1, T = -1, B = -1 };
-        DwmExtendFrameIntoClientArea(h, ref glass); // let DWM use the content's alpha for the whole window
+        overMs = over ? overMs + 33 : 0;
+        if (!hover && overMs >= HoverOpenMs) { hover = true; Render(); }
+        else if (hover && !over) { hover = false; Page = "grid"; Render(); }
     }
 
-    // The system owns the region after SetWindowRgn, so it is not deleted here.
-    public static void Region(IntPtr h, int l, int t, int r, int b) => SetWindowRgn(h, CreateRectRgn(l, t, r, b), true);
+    void SetGhost(bool on)
+    {
+        ghost = on;
+        hover = false;
+        overMs = 0;
+        Region(size, PadFor(size));
+        ElementCompositionPreview.GetElementVisual((FrameworkElement)Content).StartAnimation("Opacity", Fade(on ? 0 : 1, 150, 0));
+        Render();
+    }
+
+    void SlowTick()
+    {
+        if (Focus.Tick(DateTime.Now) && Prefs.Sound) Chime.Play();
+        current?.Update(); // clock, focus countdown
+        if (Focus.Running != currentKey.EndsWith("focus") && current is NotchView) Render();
+    }
+
+    void OnDone(string sessionId)
+    {
+        if (Prefs.Sound) Chime.Play();
+        flash = sessionId;
+        flashTimer.Stop();
+        flashTimer.Start();
+        Render();
+    }
+
+    // ---------- actions ----------
+
+    public void Decide(string behavior)
+    {
+        if (Approval is not { } a) return;
+        if (behavior == "allow") Love++;
+        Hub.Decide(a.Id, behavior);
+    }
+
+    public void SavePrefs(Action<Prefs> change)
+    {
+        change(Prefs);
+        Prefs.Save();
+        Render();
+    }
 }
