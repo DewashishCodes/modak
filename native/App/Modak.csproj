@@ -18,6 +18,9 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Assets\modak\*.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Core\Modak.Core.csproj" />
   </ItemGroup>
 </Project>

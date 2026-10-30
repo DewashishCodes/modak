@@ -79,15 +79,3 @@ sealed class Ring
     }
 }
 
-// Placeholder until the sprite mascot lands: the right size and mood hooks, a dumpling glyph.
-sealed class Mascot
-{
-    readonly Microsoft.UI.Xaml.Controls.TextBlock glyph;
-    public FrameworkElement Root { get; }
-    public Mascot(double size, bool still = false)
-    {
-        glyph = new Microsoft.UI.Xaml.Controls.TextBlock { Text = "\U0001F95F", FontSize = size * 0.62, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        Root = new Microsoft.UI.Xaml.Controls.Grid { Width = size, Height = size, Children = { glyph } };
-    }
-    public void Set(string mood, string? beat, int love) { }
-}
