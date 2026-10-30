@@ -3,15 +3,19 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { createServer, HOOK_PATH } = require('./server')
 const hooks = require('./hooks')
+const { watchMedia, mediaControl } = require('./widgets/media')
+const { systemStats } = require('./widgets/system')
+const { gitInfo } = require('./widgets/git')
+const { createUsage } = require('./widgets/usage')
 
 // Big enough for the fully expanded pill; the window never resizes, only the pill inside animates.
-const WIN_W = 520
-const WIN_H = 360
+const WIN_W = 820
+const WIN_H = 460
 // shortcut: fixed port, make it configurable if anyone hits a clash
 const PORT = 47821
 const HOOK_URL = `http://127.0.0.1:${PORT}${HOOK_PATH}`
 
-let win, tray
+let win, tray, stopMedia
 const send = (channel, data) => win?.webContents.send(channel, data)
 const server = createServer({ onChange: (s) => send('state', s), onSignal: (s) => send('signal', s) })
 
@@ -104,10 +108,26 @@ ipcMain.on('pill-hover', (_e, over) => win?.setIgnoreMouseEvents(!over, { forwar
 ipcMain.on('decide', (_e, id, behavior) => server.decide(id, behavior))
 ipcMain.handle('get-state', () => server.state())
 
+// Dashboard widgets: polled by the renderer only while the dashboard is open.
+const usageToday = createUsage()
+ipcMain.handle('widgets', async (_e, cwd) => ({ sys: systemStats(), git: await gitInfo(cwd), usage: usageToday() }))
+ipcMain.on('media', (_e, action) => mediaControl(action))
+
+const settings = () => ({ connected: hooks.isInstalled(), autostart: app.getLoginItemSettings().openAtLogin, sound: prefs().sound !== false })
+ipcMain.handle('get-settings', settings)
+ipcMain.handle('set-setting', (_e, key, value) => {
+  if (key === 'connected') value ? connect() : disconnect()
+  if (key === 'autostart') app.setLoginItemSettings({ openAtLogin: !!value })
+  if (key === 'sound') savePrefs({ sound: !!value })
+  refreshTray()
+  return settings()
+})
+
 if (!app.requestSingleInstanceLock()) app.quit()
 else {
   app.whenReady().then(async () => {
     createWindow()
+    stopMedia = watchMedia((m) => send('media', m))
     tray = new Tray(trayIcon())
     refreshTray()
     try {
@@ -118,6 +138,6 @@ else {
     }
     askToConnect()
   })
-  app.on('before-quit', () => server.close()) // open approvals go back to the terminal prompt
+  app.on('before-quit', () => { stopMedia?.(); server.close() }) // open approvals go back to the terminal prompt
   app.on('window-all-closed', () => app.quit())
 }
