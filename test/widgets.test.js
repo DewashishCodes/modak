@@ -1,0 +1,41 @@
+const { test } = require('node:test')
+const assert = require('node:assert')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { createUsage } = require('../electron/widgets/usage')
+const { systemStats } = require('../electron/widgets/system')
+const { gitInfo } = require('../electron/widgets/git')
+
+const msg = (id, ts, out) => JSON.stringify({ type: 'assistant', timestamp: ts, message: { id, usage: { input_tokens: 1, output_tokens: out, cache_read_input_tokens: 10, cache_creation_input_tokens: 100 } } })
+
+test('usage sums today once per message and reads appended lines incrementally', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pen-usage-'))
+  fs.mkdirSync(path.join(root, 'proj'))
+  const f = path.join(root, 'proj', 's.jsonl')
+  const now = new Date()
+  const today = now.toISOString()
+  const yesterday = new Date(now - 86400000 * 2).toISOString()
+  fs.writeFileSync(f, [msg('a', today, 5), msg('a', today, 5), msg('old', yesterday, 999), '{"type":"user"}', ''].join('\n'))
+  const usage = createUsage(root)
+  let u = usage(now)
+  assert.equal(u.output, 5)
+  assert.equal(u.messages, 1)
+  fs.appendFileSync(f, msg('b', today, 7) + '\n')
+  u = usage(now)
+  assert.equal(u.output, 12)
+  assert.equal(u.total, 2 * (1 + 10 + 100) + 12)
+})
+
+test('system stats are sane percentages', () => {
+  const s = systemStats()
+  assert.ok(s.cpu >= 0 && s.cpu <= 100)
+  assert.ok(s.ram > 0 && s.ram <= 100)
+  assert.ok(s.ramTotalGb > 0)
+})
+
+test('git info works in this repo and returns null outside one', async () => {
+  const g = await gitInfo(path.join(__dirname, '..'))
+  assert.ok(g.branch)
+  assert.equal(await gitInfo(path.join(os.tmpdir(), 'peninsula-no-such-dir')), null)
+})
