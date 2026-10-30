@@ -16,9 +16,10 @@ public static class Program
         Application.Start(_ =>
         {
             System.Threading.SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread()));
-            // --second and --port keep test runs off the main screen and away from real sessions on the default port.
+            // --second and --port keep test runs off the main screen and away from real sessions on the default port;
+            // --open pins the dashboard open so it can be checked without moving the mouse.
             int port = Array.IndexOf(args, "--port") is var i and >= 0 && i + 1 < args.Length && int.TryParse(args[i + 1], out var n) ? n : Island.Port;
-            new App(args.Contains("--second"), port);
+            new App(args.Contains("--second"), port, args.Contains("--open"));
         });
         return 0;
     }
@@ -28,10 +29,12 @@ public class App : Application
 {
     readonly bool second;
     readonly int port;
+    readonly bool open;
     Island? island;
 
-    public App(bool second, int port)
+    public App(bool second, int port, bool open)
     {
+        this.open = open;
         this.second = second;
         this.port = port;
         RequestedTheme = ApplicationTheme.Dark;
@@ -42,7 +45,7 @@ public class App : Application
         UnhandledException += (_, x) => CrashLog.Write(x.Exception);
         try
         {
-            island = new Island(second, port);
+            island = new Island(second, port, open);
         }
         catch (Exception x) { CrashLog.Write(x); throw; }
     }

@@ -48,7 +48,7 @@ public sealed partial class Island : Window
     public readonly FocusTimer Focus = new();
     public Snapshot State { get; private set; } = new([], []);
     string? flash; // session that just finished
-    bool hover, ghost;
+    bool hover, ghost, pinned;
     int overMs;
     public string Page { get; set; } = "grid"; // grid | settings
     public int Index { get; set; }
@@ -59,7 +59,7 @@ public sealed partial class Island : Window
     Vector2 size;
 
     // second: open on a non-primary display, so test runs stay out of the way of the main screen.
-    public Island(bool second, int port)
+    public Island(bool second, int port, bool pinned = false)
     {
         hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         ui = DispatcherQueue;
@@ -157,6 +157,9 @@ public sealed partial class Island : Window
         // The window itself never takes focus: Enter typed into a terminal must not approve anything.
         Native.OnMessage(hwnd, (msg, w) => { if (msg == 0x0312) Decide(w == 1 ? "allow" : "deny"); }); // WM_HOTKEY
 
+        Dashboard.Warm();
+        this.pinned = pinned;
+        hover = pinned;
         Closed += (_, _) => server.Dispose(); // open approvals go back to the terminal prompt
         Render();
     }
@@ -173,6 +176,8 @@ public sealed partial class Island : Window
         target.StartAnimation(property, e);
     }
 
+    readonly List<DispatcherQueueTimer> timers = []; // held here: an unreferenced timer is collected and stops firing
+
     DispatcherQueueTimer Timer(int ms, bool repeat, Action tick)
     {
         var t = DispatcherQueue.CreateTimer();
@@ -180,6 +185,7 @@ public sealed partial class Island : Window
         t.IsRepeating = repeat;
         t.Tick += (_, _) => tick();
         if (repeat) t.Start();
+        timers.Add(t);
         return t;
     }
 
@@ -216,6 +222,9 @@ public sealed partial class Island : Window
         }
         else current?.Update();
     }
+
+    // Rebuilds the current view, for changes a view cannot pick up in Update (the sound icon, settings).
+    public void Rebuild() { currentKey = ""; Render(); }
 
     void Swap(IView next)
     {
@@ -299,6 +308,7 @@ public sealed partial class Island : Window
     // shortcut: polls the cursor 30 times a second (tiny cost), use a mouse hook if this ever shows up in a profile
     void HoverTick()
     {
+        if (pinned) return;
         Native.GetCursorPos(out var pt);
         float x = (pt.X - origin.X) / scale, y = (pt.Y - origin.Y - Edge) / scale;
         bool over = y >= 0 && y <= size.Y && MathF.Abs(x - WinW / 2) <= size.X / 2;
