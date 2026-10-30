@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import { Play, Pause, Branch, Chip, Spark, Image, Reset } from './icons.jsx'
 import { mmss } from './focus.js'
 
-const api = window.peninsula
+const api = window.modak
 const fmtTokens = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n))
 
 // Colored rounded square holding a white icon, like an app icon.
@@ -232,9 +232,9 @@ export function Settings({ settings, onChange }) {
   if (!settings) return null
   return (
     <div className="settings">
-      <Toggle label="Connected to Claude Code" hint="Peninsula's hooks in ~/.claude/settings.json" on={settings.connected} onChange={(v) => onChange('connected', v)} />
+      <Toggle label="Connected to Claude Code" hint="Modak's hooks in ~/.claude/settings.json" on={settings.connected} onChange={(v) => onChange('connected', v)} />
       <Toggle label="Sound" hint="Chime when work is done" on={settings.sound} onChange={(v) => onChange('sound', v)} />
-      <Toggle label="Start with Windows" hint="Open Peninsula when you sign in" on={settings.autostart} onChange={(v) => onChange('autostart', v)} />
+      <Toggle label="Start with Windows" hint="Open Modak when you sign in" on={settings.autostart} onChange={(v) => onChange('autostart', v)} />
       <div className="setting">
         <span className="clip"><b>Photos folder</b><small className="clip">{settings.photosDir}</small></span>
         <span className="setting-actions">
@@ -242,7 +242,7 @@ export function Settings({ settings, onChange }) {
           <button className="link" onClick={() => onChange('photosDir')}>Change</button>
         </span>
       </div>
-      <div className="setting-tip">Tips: hold <kbd>Shift</kbd> over Peninsula to click what is behind it. While an approval waits, <kbd>Ctrl+Alt+Y</kbd> allows and <kbd>Ctrl+Alt+N</kbd> denies.</div>
+      <div className="setting-tip">Tips: hold <kbd>Shift</kbd> over Modak to click what is behind it. While an approval waits, <kbd>Ctrl+Alt+Y</kbd> allows and <kbd>Ctrl+Alt+N</kbd> denies.</div>
     </div>
   )
 }

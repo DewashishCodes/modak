@@ -1,6 +1,6 @@
 // Dev only: when the UI runs in a normal browser (no Electron preload), fake the bridge with sample
 // sessions so every state can be looked at. ?approval shows the approval bar, ?done the done bar, ?nophotos the empty slideshow.
-if (!window.peninsula) {
+if (!window.modak) {
   const q = new URLSearchParams(location.search)
   const sessions = [
     { id: 'a', folder: 'webshop', cwd: '.', status: 'working', activity: 'Editing checkout.ts', updatedAt: 2,
@@ -15,7 +15,7 @@ if (!window.peninsula) {
   const photo = (a, b) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><circle cx="290" cy="120" r="50" fill="#fff" opacity=".5"/></svg>`)
   const photos = q.has('nophotos') ? [] : [photo('#f97316', '#7c3aed'), photo('#06b6d4', '#1e3a8a'), photo('#f43f5e', '#fbbf24')]
   const subs = { signal: [] }
-  window.peninsula = {
+  window.modak = {
     setHover() {},
     getState: async () => ({ sessions, approvals }),
     onState: () => () => {},
@@ -30,8 +30,8 @@ if (!window.peninsula) {
     }),
     photos: async () => photos,
     openPhotos: () => console.log('open photos folder'),
-    getSettings: async () => ({ connected: true, autostart: false, sound: true, photosDir: 'C:\\Users\\you\\Pictures\\Peninsula' }),
-    setSetting: async (k, v) => ({ connected: true, autostart: false, sound: true, photosDir: 'C:\\Users\\you\\Pictures\\Peninsula', [k]: v }),
+    getSettings: async () => ({ connected: true, autostart: false, sound: true, photosDir: 'C:\\Users\\you\\Pictures\\Modak' }),
+    setSetting: async (k, v) => ({ connected: true, autostart: false, sound: true, photosDir: 'C:\\Users\\you\\Pictures\\Modak', [k]: v }),
   }
   if (q.has('done')) setTimeout(() => subs.signal.forEach((cb) => cb({ type: 'done', sessionId: 'b' })), 1500) // after the app subscribes
 }

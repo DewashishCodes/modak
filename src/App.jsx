@@ -13,9 +13,9 @@ const DONE_FLASH_MS = 5000
 const HOVER_OPEN_MS = 140 // passing the mouse over the top edge should not pop the dashboard open
 const WIDGET_POLL_MS = 2000
 const WIDTH = { notch: 76, notchFocus: 150, bar: 540, dashboard: 980 }
-const api = window.peninsula
+const api = window.modak
 
-function usePeninsula(sound) {
+function useModak(sound) {
   const [state, setState] = useState({ sessions: [], approvals: [] })
   const [flash, setFlash] = useState(null) // session id that just finished
   const timer = useRef()
@@ -73,7 +73,7 @@ function ApprovalBar({ approval, more, onDecide }) {
 
 export default function App() {
   const [settings, setSettings] = useState(null)
-  const { sessions, approvals, flash } = usePeninsula(settings?.sound !== false)
+  const { sessions, approvals, flash } = useModak(settings?.sound !== false)
   const focus = useFocus(settings?.sound !== false)
   const [hover, setHover] = useState(false)
   const [ghost, setGhost] = useState(false) // Shift held: fade out and let clicks through
@@ -169,7 +169,7 @@ export default function App() {
                 {page === 'settings' ? (
                   <button className="icon-btn" onClick={() => setPage('grid')} aria-label="Back"><Back size={14} /></button>
                 ) : (
-                  <span className="brand">Peninsula</span>
+                  <span className="brand">Modak</span>
                 )}
                 <span className="spacer" />
                 <button className="icon-btn" onClick={() => changeSetting('sound', !settings?.sound)} aria-label={settings?.sound ? 'Mute' : 'Unmute'}>
