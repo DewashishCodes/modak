@@ -14,7 +14,7 @@ function createUsage(root = ROOT) {
     seen = new Set() // one assistant message is logged once per content block, all with the same usage
     offsets = new Map()
     partial = new Map()
-    totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, messages: 0 }
+    totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, messages: 0, hours: new Array(24).fill(0) }
   }
 
   const files = (dir) => {
@@ -43,6 +43,7 @@ function createUsage(root = ROOT) {
     totals.cacheRead += u.cache_read_input_tokens || 0
     totals.cacheWrite += u.cache_creation_input_tokens || 0
     totals.messages++
+    totals.hours[new Date(j.timestamp).getHours()] += u.output_tokens || 0
   }
 
   return function usageToday(now = new Date()) {
@@ -65,7 +66,7 @@ function createUsage(root = ROOT) {
       partial.set(f, lines.pop()) // last line may still be being written
       for (const l of lines) addLine(l, start)
     }
-    return { ...totals, total: totals.input + totals.output + totals.cacheRead + totals.cacheWrite }
+    return { ...totals, hours: [...totals.hours], total: totals.input + totals.output + totals.cacheRead + totals.cacheWrite }
   }
 }
 

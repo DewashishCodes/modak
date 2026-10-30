@@ -25,6 +25,8 @@ test('usage sums today once per message and reads appended lines incrementally',
   u = usage(now)
   assert.equal(u.output, 12)
   assert.equal(u.total, 2 * (1 + 10 + 100) + 12)
+  assert.equal(u.hours[now.getHours()], 12)
+  assert.equal(u.hours.reduce((a, b) => a + b), 12)
 })
 
 test('system stats are sane percentages', () => {
@@ -37,5 +39,6 @@ test('system stats are sane percentages', () => {
 test('git info works in this repo and returns null outside one', async () => {
   const g = await gitInfo(path.join(__dirname, '..'))
   assert.ok(g.branch)
+  assert.equal(g.added + g.modified + g.deleted <= g.changed * 2, true)
   assert.equal(await gitInfo(path.join(os.tmpdir(), 'peninsula-no-such-dir')), null)
 })
