@@ -17,7 +17,7 @@ Modak sits in a small notch joined to the top edge of the screen. It glows while
   - CPU and RAM rings.
   - Usage today: output tokens, token mix bar, hourly chart (read from Claude Code transcripts).
   - Git for the session's folder: branch, ahead or behind, change chips, changed files, last commit.
-  - Settings: connect or disconnect Claude Code, sound, start with Windows, photos folder.
+  - Settings: connect or disconnect Claude Code and Codex, sound, start with Windows, photos folder.
 - **Shift hover:** hold Shift over Modak and it fades away so you can click whatever is behind it.
 - **Modak's moods:** idle (blinks), working (focused, steaming), asking (curious), done (hop), love (after Allow), wink (one poke), dizzy (five quick pokes), sleepy (after two idle minutes).
 
@@ -27,12 +27,14 @@ Modak sits in a small notch joined to the top edge of the screen. It glows while
 npm install
 node node_modules/electron/install.js   # only if Electron says it "failed to install correctly"
 npm run dev                             # starts Vite and opens the app
-npm test                                # node --test, 21 tests
+npm test                                # node --test
 ```
 
 `npm run dev` is the only command you need: it opens Electron once Vite is ready. Close the app to stop both.
 
 On first launch Modak asks to add its hooks to `~/.claude/settings.json` (a backup is kept next to it as `settings.json.modak-backup`). Your other settings and hooks are left alone. Disconnect any time from settings or the tray.
+
+**Codex:** turn on "Connected to Codex" in settings or the tray. Modak adds a forwarder hook to `~/.codex/hooks.json` (needs `node` on PATH). Codex asks you to trust new hooks once: run `/hooks` in Codex and approve them. Codex sessions show up next to Claude Code ones, approvals work the same way.
 
 To look at the UI without Electron, open http://localhost:5280/ in a browser while `npm run dev` runs. A mock fills in sample sessions. Add `?approval`, `?done` or `?nophotos` to see those states.
 
@@ -42,6 +44,7 @@ Claude Code supports HTTP hooks, so there is no hook script. Modak listens on `1
 
 - Tool, prompt, notification and stop events update each session's state and live preview.
 - `PermissionRequest` is held open until you click Allow or Deny, then answered with Claude Code's decision JSON. "Answer in terminal", quitting Modak, or Modak not running all return an empty reply, and Claude Code falls back to its normal terminal prompt.
+- Codex only runs command hooks, so `electron/modak-forward.js` pipes each Codex event to the same endpoint and prints the reply (or `{}` when Modak is not running). Codex sends the same fields and decision JSON as Claude Code; its `apply_patch` edits get their own activity line and diff.
 - The server only accepts `application/json` from `127.0.0.1` or `localhost` on its own port, with a 1 MB cap.
 
 See `CLAUDE.md` for the code map and `docs/PRD.md` for the original plan.

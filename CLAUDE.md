@@ -16,8 +16,9 @@ Windows desktop "island" for Claude Code, Electron + React. Formerly called Peni
 |---|---|
 | `electron/main.js` | Fixed transparent window (1040x480, never resized, only the pill animates), click-through with hover forwarding, tray, connect dialog, IPC, global approval keys, `modak-photo://` protocol |
 | `electron/server.js` | HTTP hook server: sessions, previews, held PermissionRequest responses, request guards |
+| `electron/modak-forward.js` | Codex command hook: stdin event to our HTTP endpoint, reply (or `{}`) to stdout, tags `modak_agent: codex` |
 | `electron/describe.js` | Tool call to activity line, approval question, diff/terminal/answer preview |
-| `electron/hooks.js` | Install, uninstall, stale detection of our hooks in `~/.claude/settings.json` (backup, atomic write, never overwrites unparseable JSON) |
+| `electron/hooks.js` | Install, uninstall, stale detection of our hooks in `~/.claude/settings.json` and `~/.codex/hooks.json` (backup, atomic write, never overwrites unparseable JSON) |
 | `electron/widgets/*` | `system` CPU/RAM, `git` branch/files/ahead-behind, `usage` today's tokens from transcripts (incremental reads), `photos` folder listing and safe path resolver |
 | `src/App.jsx` | Views: notch, approval bar, done bar, dashboard grid, settings; shift-hover ghost mode; hover open delay |
 | `src/AgentTile.jsx`, `src/Preview.jsx` | Agent tile and its mini terminal |
@@ -38,11 +39,11 @@ Windows desktop "island" for Claude Code, Electron + React. Formerly called Peni
 
 Done and checked in the browser mock: notch, approval and done bars, dashboard with all tiles, settings, Modak with 8 moods, focus timer with reset, shift click-through, approval keys. Earlier milestones were tested by the user with real Claude Code (activity, Allow, Deny, done chime).
 
-Not verified on the real app since the last round: the photo slideshow with real files, the `modak-photo://` protocol, the old-hook migration on the user's real settings, the approval keys during a real approval.
+Not verified on the real app since the last round: the photo slideshow with real files, the `modak-photo://` protocol, the old-hook migration on the user's real settings, the approval keys during a real approval, Codex support (tested only with the forwarder against the server; never with real Codex, which also needs the user to trust the hooks via `/hooks`).
 
 ## Next
 
 - User checks the latest build with real Claude Code sessions and real photos.
-- Codex support (Codex has hooks too, but only command hooks: needs a tiny forwarder script).
 - "Ask about my screen" (screenshot to the Claude API), from the original PRD.
+- Codex: no stale detection yet (forwarder path is baked into the command, so moving the repo needs a reconnect). Packaged builds need the forwarder outside asar and a node to run it.
 - Packaging only after the user approves features: electron-builder NSIS, auto-update; add `asarUnpack` for anything read from disk at runtime.
