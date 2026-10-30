@@ -4,9 +4,10 @@ const path = require('node:path')
 
 const SETTINGS = path.join(os.homedir(), '.claude', 'settings.json')
 const EVENTS = ['SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PermissionRequest', 'Notification', 'Stop']
-const MARK = '/peninsula/' // every hook URL we add contains this, so uninstall touches only ours
+const MARK = '/modak/' // every hook URL we add contains this, so uninstall touches only ours
+const LEGACY_MARK = '/peninsula/' // the app's old name; still ours so a reinstall replaces those entries
 
-const ours = (h) => h?.type === 'http' && String(h.url || '').includes(MARK)
+const ours = (h) => h?.type === 'http' && (String(h.url || '').includes(MARK) || String(h.url || '').includes(LEGACY_MARK))
 
 function read(file) {
   if (!fs.existsSync(file)) return {}
@@ -17,9 +18,9 @@ function read(file) {
 
 function write(file, settings) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  const backup = file + '.peninsula-backup'
+  const backup = file + '.modak-backup'
   if (fs.existsSync(file) && !fs.existsSync(backup)) fs.copyFileSync(file, backup)
-  const tmp = file + '.peninsula-tmp'
+  const tmp = file + '.modak-tmp'
   fs.writeFileSync(tmp, JSON.stringify(settings, null, 2) + '\n')
   fs.renameSync(tmp, file)
 }
@@ -62,4 +63,14 @@ function uninstall(file = SETTINGS) {
   write(file, strip(read(file)))
 }
 
-module.exports = { install, uninstall, isInstalled, SETTINGS, EVENTS }
+// True when our hooks are installed but some point at another URL (old name or port), so they need refreshing.
+function isStale(url, file = SETTINGS) {
+  try {
+    const all = Object.values(read(file).hooks || {}).flat().flatMap((g) => g?.hooks || []).filter(ours)
+    return all.length > 0 && all.some((h) => h.url !== url)
+  } catch {
+    return false
+  }
+}
+
+module.exports = { install, uninstall, isInstalled, isStale, SETTINGS, EVENTS }

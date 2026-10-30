@@ -5,9 +5,9 @@ const os = require('node:os')
 const path = require('node:path')
 const { install, uninstall, isInstalled, EVENTS } = require('../electron/hooks')
 
-const URL = 'http://127.0.0.1:47821/peninsula/hook'
+const URL = 'http://127.0.0.1:47821/modak/hook'
 const tmpFile = (content) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'peninsula-'))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modak-'))
   const file = path.join(dir, 'settings.json')
   if (content !== undefined) fs.writeFileSync(file, typeof content === 'string' ? content : JSON.stringify(content))
   return file
@@ -29,7 +29,19 @@ test('install adds every event, keeps user settings and hooks, and makes a backu
   assert.ok(isInstalled(f))
   for (const e of EVENTS) assert.ok(s.hooks[e].some((g) => g.hooks[0].url === URL), e)
   assert.equal(s.hooks.PermissionRequest.at(-1).hooks[0].timeout, 600)
-  assert.deepEqual(load(f + '.peninsula-backup'), userSettings)
+  assert.deepEqual(load(f + '.modak-backup'), userSettings)
+})
+
+test('hooks from the old Peninsula name are detected as stale and replaced on install', () => {
+  const { isStale } = require('../electron/hooks')
+  const f = tmpFile(userSettings)
+  install('http://127.0.0.1:47821/peninsula/hook', f)
+  assert.ok(isStale(URL, f))
+  install(URL, f)
+  assert.ok(!isStale(URL, f))
+  const urls = Object.values(load(f).hooks).flat().flatMap((g) => g.hooks).map((h) => h.url).filter(Boolean)
+  assert.ok(urls.every((u) => u === URL))
+  assert.equal(load(f).hooks.Stop.length, 2) // user's + ours, the old entry is gone
 })
 
 test('install twice does not duplicate', () => {
