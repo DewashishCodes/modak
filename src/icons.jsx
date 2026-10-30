@@ -19,4 +19,6 @@ export const Terminal = (p) => <Svg {...p}><rect x="1.8" y="2.8" width="12.4" he
 export const Chip = (p) => <Svg {...p}><rect x="4" y="4" width="8" height="8" rx="1.5" /><path d="M6 1.8V4M10 1.8V4M6 12v2.2M10 12v2.2M1.8 6H4M1.8 10H4M12 6h2.2M12 10h2.2" /></Svg>
 export const Spark = (p) => <Svg {...p}><path d="M8 1.5l1.6 4.9 4.9 1.6-4.9 1.6L8 14.5l-1.6-4.9L1.5 8l4.9-1.6z" /></Svg>
 export const Timer = (p) => <Svg {...p}><circle cx="8" cy="9" r="5.2" /><path d="M8 9V6.3M6.5 1.8h3" /></Svg>
-export const Music = (p) => <Svg {...p}><path d="M6 12.2V3.8l7-1.6v8.4" /><circle cx="4.4" cy="12.2" r="1.7" /><circle cx="11.4" cy="10.6" r="1.7" /></Svg>
+
+export const Image = (p) => <Svg {...p}><rect x="2" y="3" width="12" height="10" rx="2" /><circle cx="6" cy="6.5" r="1.2" /><path d="M2.5 11.5l3.5-3 2.5 2 2-1.5 3 2.5" /></Svg>
+export const Reset = (p) => <Svg {...p}><path d="M3 8a5 5 0 105-5 5.2 5.2 0 00-3.6 1.5L3 6" /><path d="M3 2.8V6h3.2" /></Svg>
