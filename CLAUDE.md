@@ -4,7 +4,7 @@ Windows desktop "island" for Claude Code, Electron + React. Formerly called Peni
 
 ## Commands
 
-- `npm run dev`: Vite on 5280 plus Electron (the Vite config spawns Electron, see `vite.config.mjs`).
+- `npm run dev`: Vite on 5280 plus Electron (the Vite config spawns Electron, see `vite.config.mjs`). Dev mode is heavier (Vite, React dev build); judge speed and RAM with `npm start`.
 - `npm test`: `node --test`, covers server, hooks and widgets.
 - `node scripts/modak-gen.js`: regenerates `src/modak.generated.js` from the mascot design.
 - Browser preview with fake data: http://localhost:5280/ (`?approval`, `?done`, `?nophotos`), from `src/mock.js` (dev only).
@@ -33,6 +33,7 @@ Windows desktop "island" for Claude Code, Electron + React. Formerly called Peni
 - Never use em or en dashes anywhere: code, comments, docs, chat.
 - Finish features and get the user's check before any packaging, installer or release step.
 - The user wants it to feel as smooth and polished as twocode.nl: animate only transform and opacity, springs, never resize the OS window.
+- No endless animations (measured 2026-10-30): on Windows every frame of the big transparent window costs about 20% of a CPU core, even for a 10px spinner. Animate in bursts and then rest (see `REST_AFTER_MS` in `src/Mascot.jsx`); the idle notch should sit near 0% CPU.
 - Keep Modak original (not a robot, not TwoCode's Robo).
 
 ## Status (2026-10-30)
