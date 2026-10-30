@@ -132,6 +132,7 @@ export default function App() {
       onMouseEnter={enter}
       onMouseLeave={leave}
     >
+      <div className="pill-clip">
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.div
           key={view === 'approval' ? 'approval' + approval.id : view}
@@ -194,6 +195,7 @@ export default function App() {
           )}
         </motion.div>
       </AnimatePresence>
+      </div>
     </motion.div>
   )
 }

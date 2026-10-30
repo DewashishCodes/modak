@@ -23,10 +23,12 @@ if (typeof document !== 'undefined' && !document.getElementById('modak-defs')) {
 
 // Modak, the mascot. mood: idle | working | asking | done; it adds love, wink, dizzy and sleepy on its own.
 // beat: anything that changes when the agent does something new (its activity line), wakes Modak up.
-export default function Mascot({ mood = 'idle', size = 26, loveSignal = 0, beat }) {
+// still: start resting, so mounting it (the dashboard tile) costs no animation frames.
+export default function Mascot({ mood = 'idle', size = 26, loveSignal = 0, beat, still = false }) {
   const [override, setOverride] = useState(null)
   const [sleepy, setSleepy] = useState(false)
-  const [rest, setRest] = useState(false)
+  const [rest, setRest] = useState(still)
+  const woke = useRef(!still)
   const [blink, setBlink] = useState(false)
   const pokes = useRef([])
   const timer = useRef()
@@ -66,7 +68,8 @@ export default function Mascot({ mood = 'idle', size = 26, loveSignal = 0, beat 
   const face = override || (mood === 'idle' && sleepy ? 'sleepy' : mood)
 
   useEffect(() => {
-    setRest(false)
+    if (woke.current) setRest(false)
+    woke.current = true
     const t = setTimeout(() => setRest(true), REST_AFTER_MS)
     const b = face === 'idle' && setInterval(() => { setBlink(true); setTimeout(() => setBlink(false), 250) }, BLINK_EVERY_MS)
     return () => { clearTimeout(t); clearInterval(b) }

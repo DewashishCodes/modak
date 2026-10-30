@@ -37,11 +37,22 @@ kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; }
   --glow: transparent;
   position: relative;
   background: var(--bg);
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 22px -4px var(--glow);
-  transition: box-shadow 0.4s ease, opacity 0.2s ease;
+  transition: opacity 0.2s ease;
   will-change: transform;
 }
+/* The shadow lives on a pseudo element: as the pill's own box-shadow the spring repainted it every frame. */
+.pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 0 0 22px 22px; /* fixed, not inherit: a radius that changes per frame means a repaint per frame */
+  will-change: transform;
+  pointer-events: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 22px -4px var(--glow);
+  transition: box-shadow 0.4s ease;
+}
+.pill-clip { border-radius: inherit; overflow: hidden; }
 /* faint state-colored rim along the bottom edge, like light leaking out */
 .pill::after {
   content: '';
@@ -200,6 +211,8 @@ kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; }
 /* ---------- mascot (Modak markup and motion come from modak.generated.js) ---------- */
 .mascot { display: block; flex-shrink: 0; cursor: pointer; overflow: visible; }
 .mascot svg { display: block; }
+/* Own layer: the pill's spring then never repaints the dashboard inside it. */
+.content { will-change: transform; }
 .mascot.rest * { animation-play-state: paused !important; }
 .mascot.rest .eye { animation: none !important; }
 .mascot.rest.blink .eye { animation: mk-blink-once 0.22s ease-in-out !important; }
