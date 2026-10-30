@@ -1,6 +1,6 @@
 # Modak: notes for Claude
 
-Windows desktop "island" for Claude Code, Electron + React. Formerly called Peninsula (the hook code still recognises old `/peninsula/` hook URLs on purpose). Inspired by twocode.nl; the user compares the look against its demo video and wants **visual, not textual** UI.
+Windows desktop "island" for Claude Code, Electron + React. Formerly called Peninsula (the hook code still recognises old `/peninsula/` hook URLs on purpose). Inspired by twocode.nl; the user compares the look against its demo video and wants **visual, not textual** UI. Feature and design breakdown of TwoCode's reels, with the gap list: `docs/twocode-research.md`.
 
 ## Commands
 
