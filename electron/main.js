@@ -1,11 +1,23 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } = require('electron')
+const fs = require('node:fs')
 const path = require('node:path')
+const { createServer, HOOK_PATH } = require('./server')
+const hooks = require('./hooks')
 
 // Big enough for the fully expanded pill; the window never resizes, only the pill inside animates.
 const WIN_W = 520
 const WIN_H = 360
+// shortcut: fixed port, make it configurable if anyone hits a clash
+const PORT = 47821
+const HOOK_URL = `http://127.0.0.1:${PORT}${HOOK_PATH}`
 
-let win
+let win, tray
+const send = (channel, data) => win?.webContents.send(channel, data)
+const server = createServer({ onChange: (s) => send('state', s), onSignal: (s) => send('signal', s) })
+
+const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json')
+const prefs = () => { try { return JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) } catch { return {} } }
+const savePrefs = (p) => fs.writeFileSync(prefsFile(), JSON.stringify({ ...prefs(), ...p }))
 
 function createWindow() {
   const { bounds } = screen.getPrimaryDisplay()
@@ -35,8 +47,77 @@ function createWindow() {
   win.once('ready-to-show', () => win.showInactive())
 }
 
+// 16x16 soft pink dot drawn in code, so the tray needs no image file.
+function trayIcon() {
+  const size = 16, buf = Buffer.alloc(size * size * 4)
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const d = Math.hypot(x - 7.5, y - 8), a = Math.max(0, Math.min(1, 7 - d))
+    buf.set([0xe4, 0xd9, 0xf4, Math.round(a * 255)], (y * size + x) * 4) // BGRA
+  }
+  return nativeImage.createFromBitmap(buf, { width: size, height: size })
+}
+
+function connect() {
+  try {
+    hooks.install(HOOK_URL)
+    savePrefs({ declined: false })
+  } catch (err) {
+    dialog.showErrorBox('Peninsula', `Could not update ${hooks.SETTINGS}.\nIt may not be valid JSON, so it was left untouched.\n\n${err.message}`)
+  }
+  refreshTray()
+}
+
+function disconnect() {
+  try { hooks.uninstall() } catch (err) { dialog.showErrorBox('Peninsula', err.message) }
+  savePrefs({ declined: true })
+  refreshTray()
+}
+
+function refreshTray(status = 'Watching Claude Code') {
+  const connected = hooks.isInstalled()
+  tray.setToolTip(`Peninsula: ${connected ? status : 'not connected'}`)
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Connected to Claude Code', type: 'checkbox', checked: connected, click: () => (connected ? disconnect() : connect()) },
+    { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
+    { type: 'separator' },
+    { label: 'Quit Peninsula', click: () => app.quit() },
+  ]))
+}
+
+async function askToConnect() {
+  if (hooks.isInstalled() || prefs().declined) return
+  const { response } = await dialog.showMessageBox({
+    type: 'question',
+    buttons: ['Connect', 'Not now'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Peninsula',
+    message: 'Connect Peninsula to Claude Code?',
+    detail: `This adds Peninsula's hooks to ${hooks.SETTINGS} (a backup is kept next to it). Your other settings and hooks stay as they are. You can disconnect any time from the tray icon.`,
+  })
+  if (response === 0) connect()
+  else savePrefs({ declined: true })
+}
+
 // Renderer tells us when the cursor is over the pill; everywhere else clicks go to the apps underneath.
 ipcMain.on('pill-hover', (_e, over) => win?.setIgnoreMouseEvents(!over, { forward: true }))
+ipcMain.on('decide', (_e, id, behavior) => server.decide(id, behavior))
+ipcMain.handle('get-state', () => server.state())
 
-app.whenReady().then(createWindow)
-app.on('window-all-closed', () => app.quit())
+if (!app.requestSingleInstanceLock()) app.quit()
+else {
+  app.whenReady().then(async () => {
+    createWindow()
+    tray = new Tray(trayIcon())
+    refreshTray()
+    try {
+      await server.listen(PORT)
+    } catch (err) {
+      refreshTray(`port ${PORT} is busy`)
+      dialog.showErrorBox('Peninsula', `Port ${PORT} is already in use, so Peninsula cannot hear Claude Code.\nIs another copy running?\n\n${err.message}`)
+    }
+    askToConnect()
+  })
+  app.on('before-quit', () => server.close()) // open approvals go back to the terminal prompt
+  app.on('window-all-closed', () => app.quit())
+}
