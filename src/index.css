@@ -81,7 +81,7 @@ kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; }
 
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex-shrink: 0; }
 .dot.working { background: var(--working); box-shadow: 0 0 8px var(--working); }
-.dot.asking { background: var(--asking); box-shadow: 0 0 8px var(--asking); animation: pulse 1.2s ease-in-out infinite; }
+.dot.asking { background: var(--asking); box-shadow: 0 0 8px var(--asking); animation: pulse 1.2s ease-in-out 4; /* not infinite: every frame of this window is costly */ }
 .dot.done { background: var(--done); box-shadow: 0 0 8px var(--done); }
 @keyframes pulse { 50% { opacity: 0.4; } }
 
@@ -200,6 +200,10 @@ kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; }
 /* ---------- mascot (Modak markup and motion come from modak.generated.js) ---------- */
 .mascot { display: block; flex-shrink: 0; cursor: pointer; overflow: visible; }
 .mascot svg { display: block; }
+.mascot.rest * { animation-play-state: paused !important; }
+.mascot.rest .eye { animation: none !important; }
+.mascot.rest.blink .eye { animation: mk-blink-once 0.22s ease-in-out !important; }
+@keyframes mk-blink-once { 50% { transform: scaleY(0.1); } }
 
 /* ---------- visual widgets ---------- */
 .isq { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: #fff; flex-shrink: 0; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 10px -4px rgba(0, 0, 0, 0.6); }

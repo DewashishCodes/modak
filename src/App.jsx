@@ -136,14 +136,14 @@ export default function App() {
         <motion.div
           key={view === 'approval' ? 'approval' + approval.id : view}
           className="content"
-          initial={{ opacity: 0, filter: 'blur(4px)' }}
-          animate={{ opacity: 1, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, filter: 'blur(4px)', transition: { duration: 0.1 } }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.1 } }}
           transition={{ duration: 0.22 }}
         >
           {view === 'notch' && (
             <div className="notch">
-              <Mascot mood={status} size={30} loveSignal={love} />
+              <Mascot mood={status} size={30} loveSignal={love} beat={primary?.activity} />
               {focus.running && (
                 <span className="notch-focus">
                   <Ring value={focus.progress} size={16} stroke={2.5} color="#ff9f43" />

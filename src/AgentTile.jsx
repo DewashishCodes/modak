@@ -29,7 +29,7 @@ export default function AgentTile({ sessions, index, onCycle, mood, loveSignal }
   return (
     <div className="tile agent">
       <div className="agent-head">
-        <Mascot mood={mood} size={52} loveSignal={loveSignal} />
+        <Mascot mood={mood} size={52} loveSignal={loveSignal} beat={s.activity} />
         <div className="agent-meta">
           <div className="agent-name">
             <span className={`dot ${s.status}`} />
