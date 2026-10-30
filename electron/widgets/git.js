@@ -1,7 +1,7 @@
 const { execFile } = require('node:child_process')
 
 const git = (cwd, args) => new Promise((resolve) => {
-  execFile('git', ['-C', cwd, ...args], { timeout: 2000, windowsHide: true }, (err, out) => resolve(err ? null : out.trim()))
+  execFile('git', ['-C', cwd, ...args], { timeout: 2000, windowsHide: true }, (err, out) => resolve(err ? null : out.trimEnd())) // keep leading spaces: porcelain status codes start with one
 })
 
 // Branch, changed file count and last commit for the folder a session runs in; null if it isn't a repo.
