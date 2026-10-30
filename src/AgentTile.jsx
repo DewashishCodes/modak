@@ -16,7 +16,7 @@ export default function AgentTile({ sessions, index, onCycle, mood, loveSignal }
     return (
       <div className="tile agent">
         <div className="agent-head">
-          <Mascot mood="idle" size={44} />
+          <Mascot mood="idle" size={52} />
           <div>
             <div className="agent-name">No sessions yet</div>
             <div className="agent-status idle">Start <code>claude</code> in a terminal</div>
@@ -29,7 +29,7 @@ export default function AgentTile({ sessions, index, onCycle, mood, loveSignal }
   return (
     <div className="tile agent">
       <div className="agent-head">
-        <Mascot mood={mood} size={44} loveSignal={loveSignal} />
+        <Mascot mood={mood} size={52} loveSignal={loveSignal} />
         <div className="agent-meta">
           <div className="agent-name">
             <span className={`dot ${s.status}`} />
