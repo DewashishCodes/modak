@@ -9,8 +9,8 @@ const { gitInfo } = require('./widgets/git')
 const { createUsage } = require('./widgets/usage')
 
 // Big enough for the fully expanded pill; the window never resizes, only the pill inside animates.
-const WIN_W = 820
-const WIN_H = 460
+const WIN_W = 1040
+const WIN_H = 480
 // shortcut: fixed port, make it configurable if anyone hits a clash
 const PORT = 47821
 const HOOK_URL = `http://127.0.0.1:${PORT}${HOOK_PATH}`
