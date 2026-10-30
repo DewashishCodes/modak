@@ -39,6 +39,27 @@ static class Native
     [DllImport("CoreMessaging.dll")] static extern int CreateDispatcherQueueController(DispatcherQueueOptions o, out IntPtr controller);
     [StructLayout(LayoutKind.Sequential)] struct DispatcherQueueOptions { public int dwSize, threadType, apartmentType; }
 
+    [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint mods, uint key);
+    [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
+    public delegate IntPtr SubclassProc(IntPtr h, uint msg, IntPtr w, IntPtr l, IntPtr id, IntPtr data);
+    [DllImport("comctl32.dll")] static extern bool SetWindowSubclass(IntPtr h, SubclassProc proc, IntPtr id, IntPtr data);
+    [DllImport("comctl32.dll")] static extern IntPtr DefSubclassProc(IntPtr h, uint msg, IntPtr w, IntPtr l);
+    static SubclassProc? proc; // kept alive: the window calls it for every message
+    static readonly List<Action<uint, IntPtr>> listeners = [];
+
+    // Lets the app see window messages (hotkeys, tray clicks) that WinUI does not surface.
+    public static void OnMessage(IntPtr h, Action<uint, IntPtr> listener)
+    {
+        listeners.Add(listener);
+        if (proc != null) return;
+        proc = (hwnd, msg, w, l, _, _) => { foreach (var f in listeners) f(msg, w); return DefSubclassProc(hwnd, msg, w, l); };
+        SetWindowSubclass(h, proc, 1, 0);
+    }
+
+    // Ctrl+Alt+<key>, no auto repeat. Returns false when another app already owns the combo.
+    public static bool Hotkey(IntPtr h, int id, char key) => RegisterHotKey(h, id, 0x2 | 0x1 | 0x4000, key);
+    public static void Unhotkey(IntPtr h, int id) => UnregisterHotKey(h, id);
+
     public static bool ShiftDown => (GetAsyncKeyState(0x10) & 0x8000) != 0;
 
     public static void EnsureSystemDispatcher() =>

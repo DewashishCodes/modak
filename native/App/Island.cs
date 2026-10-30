@@ -153,6 +153,10 @@ public sealed partial class Island : Window
         try { server.Listen(port); }
         catch (Exception err) { Dialogs.Error($"Port {port} is already in use, so Modak cannot hear Claude Code.\nIs another copy running?\n\n{err.Message}"); }
 
+        // Global keys exist only while an approval waits, so they never steal these combos the rest of the time.
+        // The window itself never takes focus: Enter typed into a terminal must not approve anything.
+        Native.OnMessage(hwnd, (msg, w) => { if (msg == 0x0312) Decide(w == 1 ? "allow" : "deny"); }); // WM_HOTKEY
+
         Closed += (_, _) => server.Dispose(); // open approvals go back to the terminal prompt
         Render();
     }
@@ -197,6 +201,7 @@ public sealed partial class Island : Window
         var view = View;
         var key = view switch { "approval" => "approval" + Approval!.Id, "dashboard" => "dashboard-" + Page, "notch" => Focus.Running ? "notch-focus" : "notch", _ => view };
         Glow(Status);
+        ApprovalKeys(Approval != null);
         CrashLog.Trace($"render {key} (was {currentKey}) sessions={State.Sessions.Count} approvals={State.Approvals.Count}");
         if (key != currentKey)
         {
@@ -332,6 +337,15 @@ public sealed partial class Island : Window
         flashTimer.Stop();
         flashTimer.Start();
         Render();
+    }
+
+    bool keys;
+    void ApprovalKeys(bool on)
+    {
+        if (on == keys) return;
+        keys = on;
+        if (on) { Native.Hotkey(hwnd, 1, 'Y'); Native.Hotkey(hwnd, 2, 'N'); }
+        else { Native.Unhotkey(hwnd, 1); Native.Unhotkey(hwnd, 2); }
     }
 
     // ---------- actions ----------
