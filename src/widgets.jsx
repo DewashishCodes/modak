@@ -130,7 +130,7 @@ export function Settings({ settings, onChange }) {
       <Toggle label="Connected to Claude Code" hint="Peninsula's hooks in ~/.claude/settings.json" on={settings.connected} onChange={(v) => onChange('connected', v)} />
       <Toggle label="Sound" hint="Chime when work is done" on={settings.sound} onChange={(v) => onChange('sound', v)} />
       <Toggle label="Start with Windows" hint="Open Peninsula when you sign in" on={settings.autostart} onChange={(v) => onChange('autostart', v)} />
-      <div className="setting-tip">Tip: hold <kbd>Shift</kbd> while hovering Peninsula to click whatever is behind it.</div>
+      <div className="setting-tip">Tips: hold <kbd>Shift</kbd> over Peninsula to click what is behind it. While an approval waits, <kbd>Ctrl+Alt+Y</kbd> allows and <kbd>Ctrl+Alt+N</kbd> denies.</div>
     </div>
   )
 }

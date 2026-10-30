@@ -61,8 +61,8 @@ function ApprovalBar({ approval, more, onDecide }) {
           <span className="muted">{approval.folder}:</span> Allow <b>{approval.ask}</b>?
         </button>
         {more > 0 && <span className="more">+{more}</span>}
-        <button className="pill-btn allow" onClick={() => onDecide('allow')}>Allow</button>
-        <button className="pill-btn deny" onClick={() => onDecide('deny')}>Deny</button>
+        <button className="pill-btn allow" onClick={() => onDecide('allow')} title="Allow (Ctrl+Alt+Y)">Allow</button>
+        <button className="pill-btn deny" onClick={() => onDecide('deny')} title="Deny (Ctrl+Alt+N)">Deny</button>
         <button className="icon-btn" onClick={() => onDecide('terminal')} title="Answer in terminal" aria-label="Answer in terminal"><Terminal size={14} /></button>
       </div>
       {details && <div className="bar-detail"><Preview preview={approval.preview || { kind: 'answer', text: approval.detail }} /></div>}
@@ -82,6 +82,7 @@ export default function App() {
   const pillRef = useRef()
 
   useEffect(() => { api?.getSettings().then(setSettings) }, [])
+  useEffect(() => api?.onDecidedByKey?.((b) => b === 'allow' && setLove((n) => n + 1)), [])
 
   const approval = approvals[0]
   const flashed = flash && sessions.find((s) => s.id === flash)
