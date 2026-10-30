@@ -37,6 +37,7 @@ public sealed partial class Island : Window
     readonly CompositionColorGradientStop rimStop;
     readonly Grid stage;
     readonly IntPtr hwnd;
+    public IntPtr Handle => hwnd;
     readonly float scale;
     readonly PointInt32 origin;
     readonly DispatcherQueueTimer shrink, flashTimer;
@@ -44,6 +45,7 @@ public sealed partial class Island : Window
 
     public readonly Hub Hub = new();
     readonly HookServer server;
+    readonly Tray tray;
     public Prefs Prefs { get; private set; } = Prefs.Load();
     public readonly FocusTimer Focus = new();
     public Snapshot State { get; private set; } = new([], []);
@@ -150,17 +152,24 @@ public sealed partial class Island : Window
         server = new HookServer(Hub) { OnError = CrashLog.Write };
         Hub.Changed += s => { CrashLog.Trace($"hub changed: {s.Sessions.Count} sessions, {s.Approvals.Count} approvals"); OnUi(() => { State = s; Render(); }); };
         Hub.Done += id => OnUi(() => OnDone(id));
+        tray = new Tray(hwnd, this);
         try { server.Listen(port); }
-        catch (Exception err) { Dialogs.Error($"Port {port} is already in use, so Modak cannot hear Claude Code.\nIs another copy running?\n\n{err.Message}"); }
+        catch (Exception err)
+        {
+            tray.Refresh($"port {port} is busy");
+            Dialogs.Error($"Port {port} is already in use, so Modak cannot hear Claude Code.\nIs another copy running?\n\n{err.Message}");
+        }
+        if (port == Port) Connections.OnStartup(Prefs); // test runs on another port never touch the real hooks or ask
 
         // Global keys exist only while an approval waits, so they never steal these combos the rest of the time.
         // The window itself never takes focus: Enter typed into a terminal must not approve anything.
-        Native.OnMessage(hwnd, (msg, w) => { if (msg == 0x0312) Decide(w == 1 ? "allow" : "deny"); }); // WM_HOTKEY
+        Native.OnMessage(hwnd, (msg, w, _) => { if (msg == 0x0312) Decide(w == 1 ? "allow" : "deny"); }); // WM_HOTKEY
 
         Dashboard.Warm();
         this.pinned = pinned;
         hover = pinned;
-        Closed += (_, _) => server.Dispose(); // open approvals go back to the terminal prompt
+        if (pinned && Environment.GetCommandLineArgs().Contains("settings")) Page = "settings"; // --open settings
+        Closed += (_, _) => { server.Dispose(); tray.Dispose(); }; // open approvals go back to the terminal prompt
         Render();
     }
 
@@ -365,6 +374,13 @@ public sealed partial class Island : Window
         if (Approval is not { } a) return;
         if (behavior == "allow") Love++;
         Hub.Decide(a.Id, behavior);
+    }
+
+    public void Quit()
+    {
+        server.Dispose(); // open approvals go back to the terminal prompt
+        tray.Dispose();
+        Application.Current.Exit();
     }
 
     public void SavePrefs(Action<Prefs> change)

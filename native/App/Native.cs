@@ -45,14 +45,14 @@ static class Native
     [DllImport("comctl32.dll")] static extern bool SetWindowSubclass(IntPtr h, SubclassProc proc, IntPtr id, IntPtr data);
     [DllImport("comctl32.dll")] static extern IntPtr DefSubclassProc(IntPtr h, uint msg, IntPtr w, IntPtr l);
     static SubclassProc? proc; // kept alive: the window calls it for every message
-    static readonly List<Action<uint, IntPtr>> listeners = [];
+    static readonly List<Action<uint, IntPtr, IntPtr>> listeners = [];
 
     // Lets the app see window messages (hotkeys, tray clicks) that WinUI does not surface.
-    public static void OnMessage(IntPtr h, Action<uint, IntPtr> listener)
+    public static void OnMessage(IntPtr h, Action<uint, IntPtr, IntPtr> listener)
     {
         listeners.Add(listener);
         if (proc != null) return;
-        proc = (hwnd, msg, w, l, _, _) => { foreach (var f in listeners) f(msg, w); return DefSubclassProc(hwnd, msg, w, l); };
+        proc = (hwnd, msg, w, l, _, _) => { foreach (var f in listeners.ToList()) f(msg, w, l); return DefSubclassProc(hwnd, msg, w, l); };
         SetWindowSubclass(h, proc, 1, 0);
     }
 
