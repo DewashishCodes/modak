@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react'
 import Mascot from './Mascot.jsx'
 import AgentTile from './AgentTile.jsx'
 import Preview from './Preview.jsx'
-import { NowPlaying, Clock, Focus, Git, Usage, System, Settings } from './widgets.jsx'
+import { NowPlaying, Clock, Focus, Git, Usage, System, Settings, Ring } from './widgets.jsx'
+import { useFocus, mmss } from './focus.js'
 import { Gear, Sound, Mute, Check, Back, Terminal } from './icons.jsx'
 import { chime } from './chime.js'
 
@@ -11,7 +12,7 @@ const spring = { type: 'spring', stiffness: 420, damping: 32 }
 const DONE_FLASH_MS = 5000
 const HOVER_OPEN_MS = 140 // passing the mouse over the top edge should not pop the dashboard open
 const WIDGET_POLL_MS = 2000
-const WIDTH = { notch: 72, bar: 460, dashboard: 780 }
+const WIDTH = { notch: 76, notchFocus: 150, bar: 540, dashboard: 980 }
 const api = window.peninsula
 
 function usePeninsula(sound) {
@@ -73,6 +74,7 @@ function ApprovalBar({ approval, more, onDecide }) {
 export default function App() {
   const [settings, setSettings] = useState(null)
   const { sessions, approvals, flash } = usePeninsula(settings?.sound !== false)
+  const focus = useFocus(settings?.sound !== false)
   const [hover, setHover] = useState(false)
   const [ghost, setGhost] = useState(false) // Shift held: fade out and let clicks through
   const [page, setPage] = useState('grid') // grid | settings
@@ -126,7 +128,7 @@ export default function App() {
       layout
       transition={spring}
       className={`pill glow-${status} view-${view} ${ghost ? 'ghost' : ''}`}
-      style={{ width: WIDTH[view === 'approval' || view === 'done' ? 'bar' : view], borderBottomLeftRadius: view === 'notch' ? 16 : 24, borderBottomRightRadius: view === 'notch' ? 16 : 24 }}
+      style={{ width: WIDTH[view === 'approval' || view === 'done' ? 'bar' : view === 'notch' && focus.running ? 'notchFocus' : view], borderBottomLeftRadius: view === 'notch' ? 16 : 24, borderBottomRightRadius: view === 'notch' ? 16 : 24 }}
       onMouseEnter={enter}
       onMouseLeave={leave}
     >
@@ -140,7 +142,15 @@ export default function App() {
           transition={{ duration: 0.22 }}
         >
           {view === 'notch' && (
-            <div className="notch"><Mascot mood={status} size={26} loveSignal={love} /></div>
+            <div className="notch">
+              <Mascot mood={status} size={26} loveSignal={love} />
+              {focus.running && (
+                <span className="notch-focus">
+                  <Ring value={focus.progress} size={16} stroke={2.5} color="#ff9f43" />
+                  {mmss(focus.left)}
+                </span>
+              )}
+            </div>
           )}
 
           {view === 'approval' && <ApprovalBar approval={approval} more={approvals.length - 1} onDecide={decide} />}
@@ -174,7 +184,7 @@ export default function App() {
                   <AgentTile sessions={sessions} index={i} onCycle={() => setIndex((i + 1) % sessions.length)} mood={status} loveSignal={love} />
                   <NowPlaying />
                   <Clock />
-                  <Focus sound={settings?.sound !== false} />
+                  <Focus focus={focus} />
                   <Git git={widgets.git} />
                   <Usage usage={widgets.usage} />
                   <System sys={widgets.sys} />
