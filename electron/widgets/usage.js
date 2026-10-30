@@ -2,7 +2,10 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
+const { StringDecoder } = require('node:string_decoder')
+
 const ROOT = path.join(os.homedir(), '.claude', 'projects')
+const CHUNK = 1024 * 1024
 
 // Today's token use summed from Claude Code transcripts. Files are read incrementally (only new bytes)
 // because the active transcript grows on every turn.
@@ -56,15 +59,22 @@ function createUsage(root = ROOT) {
       if (st.mtime < start) continue
       const from = offsets.get(f) || 0
       if (st.size <= from) continue
+      // Chunked so a day of big transcripts never sits in memory at once; the decoder keeps characters split across chunks whole.
       const fd = fs.openSync(f, 'r')
-      const buf = Buffer.alloc(st.size - from)
-      fs.readSync(fd, buf, 0, buf.length, from)
-      fs.closeSync(fd)
-      offsets.set(f, st.size)
-      const text = (partial.get(f) || '') + buf.toString('utf8')
-      const lines = text.split('\n')
-      partial.set(f, lines.pop()) // last line may still be being written
-      for (const l of lines) addLine(l, start)
+      const buf = Buffer.alloc(Math.min(CHUNK, st.size - from))
+      const dec = new StringDecoder('utf8')
+      let pos = from
+      try {
+        while (pos < st.size) {
+          const n = fs.readSync(fd, buf, 0, Math.min(buf.length, st.size - pos), pos)
+          if (!n) break
+          pos += n
+          const lines = ((partial.get(f) || '') + dec.write(buf.subarray(0, n))).split('\n')
+          partial.set(f, lines.pop()) // last line may still be being written
+          for (const l of lines) addLine(l, start)
+        }
+      } finally { fs.closeSync(fd) }
+      offsets.set(f, pos)
     }
     return { ...totals, hours: [...totals.hours], total: totals.input + totals.output + totals.cacheRead + totals.cacheWrite }
   }

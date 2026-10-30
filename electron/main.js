@@ -141,8 +141,12 @@ ipcMain.on('decide', (_e, id, behavior) => server.decide(id, behavior))
 ipcMain.handle('get-state', () => server.state())
 
 // Dashboard widgets: polled by the renderer only while the dashboard is open.
-const usageToday = createUsage()
-ipcMain.handle('widgets', async (_e, cwd) => ({ sys: systemStats(), git: await gitInfo(cwd), usage: usageToday() }))
+// The renderer polls every 2s for CPU and RAM; the slow ones refresh less often. Usage reads transcripts
+// synchronously, so it is also warmed at startup instead of on the first hover.
+const atMost = (ms, fn) => { let at = 0, arg, val; return (a) => { if (a !== arg || Date.now() - at > ms) { arg = a; at = Date.now(); val = fn(a) } return val } }
+const usageToday = atMost(30000, createUsage())
+const gitFor = atMost(10000, gitInfo)
+ipcMain.handle('widgets', async (_e, cwd) => ({ sys: systemStats(), git: await gitFor(cwd), usage: usageToday() }))
 
 const photosDir = () => prefs().photosDir || path.join(app.getPath('pictures'), 'Modak')
 ipcMain.handle('photos', () => listPhotos(photosDir()).map((n) => `modak-photo://img/${encodeURIComponent(n)}`))
@@ -181,6 +185,7 @@ else {
       dialog.showErrorBox('Modak', `Port ${PORT} is already in use, so Modak cannot hear Claude Code.\nIs another copy running?\n\n${err.message}`)
     }
     askToConnect()
+    setTimeout(() => usageToday(), 3000)
   })
   app.on('before-quit', () => { globalShortcut.unregisterAll(); server.close() }) // open approvals go back to the terminal prompt
   app.on('window-all-closed', () => app.quit())
