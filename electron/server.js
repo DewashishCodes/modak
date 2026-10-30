@@ -80,7 +80,7 @@ function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
       case 'PermissionRequest': {
         releaseSession(s.id) // only one open card per session
         const id = crypto.randomUUID()
-        pending.set(id, { id, sessionId: s.id, folder: s.folder, tool: ev.tool_name, detail: detail(ev.tool_name, ev.tool_input), createdAt: Date.now(), res })
+        pending.set(id, { id, sessionId: s.id, folder: s.folder, tool: ev.tool_name, detail: detail(ev.tool_name, ev.tool_input), activity: describe(ev.tool_name, ev.tool_input), createdAt: Date.now(), res })
         res.on('close', () => { if (pending.delete(id)) changed() }) // Claude gave up or timed out
         s.status = 'asking'
         s.activity = `Wants to use ${ev.tool_name}`
@@ -155,7 +155,7 @@ function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
         const decision = behavior === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied from Peninsula' }
         release(id, { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } })
       }
-      if (s) { s.status = 'working'; s.activity = behavior === 'deny' ? 'Denied' : s.activity }
+      if (s) { s.status = 'working'; s.activity = behavior === 'deny' ? 'Denied' : p.activity }
       changed()
     },
     // On quit: hand every open request back to the terminal prompt.

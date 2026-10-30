@@ -39,6 +39,7 @@ test('PermissionRequest is held until allow, then returns the decision JSON', as
   const body = await (await p).json()
   assert.deepEqual(body, { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } })
   assert.equal(last.approvals.length, 0)
+  assert.equal(last.sessions[0].activity, 'Running rm -rf build')
 })
 
 test('deny returns deny with a message', async () => {
