@@ -33,25 +33,85 @@ html, body, #root {
   white-space: nowrap;
 }
 
-.title { font-size: 13px; font-weight: 600; }
-.sub { font-size: 12px; color: #9a9aa2; }
+.title { font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.sub {
+  font-size: 12px;
+  color: #9a9aa2;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .body {
-  padding: 4px 18px 16px;
+  padding: 2px 18px 16px;
   font-size: 13px;
   color: #c9c9cf;
   line-height: 1.45;
 }
 
+.card-title { margin-bottom: 8px; }
+.card-title b { color: #f2f2f3; }
+.more { float: right; font-size: 11px; color: #9a9aa2; }
+
+.detail {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  max-height: 96px;
+  overflow: auto;
+  background: #18181b;
+  border-radius: 10px;
+  font: 12px/1.45 'Cascadia Code', Consolas, monospace;
+  color: #e6e6ea;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.buttons { display: flex; gap: 8px; }
+.btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: 600 12px inherit;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.12s, filter 0.12s;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn:active { transform: scale(0.95); }
+.btn.allow { background: #f4d9e4; color: #241a20; }
+.btn.deny { background: #2a2a2f; color: #f2f2f3; }
+.btn.ghost { background: transparent; color: #9a9aa2; margin-left: auto; }
+
+.session { padding: 6px 0; }
+.session + .session { border-top: 1px solid #1e1e22; }
+.session-head { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.session-head b { color: #f2f2f3; flex-shrink: 0; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #55555c; flex-shrink: 0; }
+.dot.working { background: #8fb4ff; }
+.dot.asking { background: #ffcf6e; }
+.dot.done { background: #7ee0a1; }
+
+.answer { margin-top: 4px; color: #b4b4bb; }
+.clamp2, .clamp4 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp2 { -webkit-line-clamp: 2; }
+.clamp4 { -webkit-line-clamp: 4; }
+.empty { color: #9a9aa2; }
+code { font-family: 'Cascadia Code', Consolas, monospace; color: #f4d9e4; }
+
+/* ---- mascot ---- */
 .blob {
   width: 22px;
   height: 18px;
+  flex-shrink: 0;
   border-radius: 50% 50% 46% 46%;
   background: #f4d9e4;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 5px;
+  cursor: pointer;
 }
 
 .eye {
@@ -66,3 +126,44 @@ html, body, #root {
   0%, 94%, 100% { transform: scaleY(1); }
   97% { transform: scaleY(0.1); }
 }
+
+/* working: focused, eyes scan side to side */
+.mood-working .eye { animation: blink 4s infinite, scan 2.4s ease-in-out infinite; }
+@keyframes scan {
+  0%, 100% { translate: -1.5px 0; }
+  50% { translate: 1.5px 0; }
+}
+
+/* asking: curious tilt and wobble, bigger eyes */
+.mood-asking { animation: wobble 1.2s ease-in-out infinite; }
+.mood-asking .eye { width: 4px; height: 6px; }
+@keyframes wobble {
+  0%, 100% { rotate: -8deg; }
+  50% { rotate: 8deg; }
+}
+
+/* done: happy arcs and a little hop */
+.mood-done { animation: hop 0.9s ease-in-out 3; }
+.mood-done .eye {
+  width: 5px;
+  height: 3px;
+  background: none;
+  border-top: 2px solid #241a20;
+  border-radius: 50% 50% 0 0;
+  animation: none;
+}
+@keyframes hop {
+  0%, 100% { translate: 0 0; }
+  40% { translate: 0 -3px; }
+}
+
+/* dizzy: spinning eyes after too many pokes */
+.mood-dizzy .eye {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: none;
+  border: 1.5px solid #241a20;
+  animation: spin 0.5s linear infinite;
+}
+@keyframes spin { to { rotate: 360deg; } }
