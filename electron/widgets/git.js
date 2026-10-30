@@ -9,11 +9,29 @@ async function gitInfo(cwd) {
   if (!cwd) return null
   const branch = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'])
   if (branch === null) return null
-  const [status, log] = await Promise.all([git(cwd, ['status', '--porcelain']), git(cwd, ['log', '-1', '--format=%s%x1f%cr'])])
-  const [subject = '', when = ''] = (log || '').split('\x1f')
+  const [status, log, counts] = await Promise.all([
+    git(cwd, ['status', '--porcelain']),
+    git(cwd, ['log', '-1', '--format=%s%x1f%cr%x1f%an']),
+    git(cwd, ['rev-list', '--left-right', '--count', '@{upstream}...HEAD']), // null when there is no upstream
+  ])
+  const [subject = '', when = '', author = ''] = (log || '').split('\x1f')
   const files = status ? status.split('\n') : []
   const count = (re) => files.filter((l) => re.test(l.slice(0, 2))).length
-  return { branch, changed: files.length, added: count(/\?\?|A/), modified: count(/M|R|C|U/), deleted: count(/D/), subject, when }
+  const kind = (xy) => (/D/.test(xy) ? 'del' : /\?\?|A/.test(xy) ? 'add' : 'mod')
+  const [behind, ahead] = counts ? counts.split(/\s+/).map(Number) : [null, null]
+  return {
+    branch,
+    changed: files.length,
+    added: count(/\?\?|A/),
+    modified: count(/M|R|C|U/),
+    deleted: count(/D/),
+    files: files.slice(0, 4).map((l) => ({ kind: kind(l.slice(0, 2)), path: l.slice(3).replace(/^"|"$/g, '') })),
+    ahead,
+    behind,
+    subject,
+    when,
+    author,
+  }
 }
 
 module.exports = { gitInfo }
