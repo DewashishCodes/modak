@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, globalShortcut } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 const { createServer, HOOK_PATH } = require('./server')
@@ -17,7 +17,22 @@ const HOOK_URL = `http://127.0.0.1:${PORT}${HOOK_PATH}`
 
 let win, tray, stopMedia
 const send = (channel, data) => win?.webContents.send(channel, data)
-const server = createServer({ onChange: (s) => send('state', s), onSignal: (s) => send('signal', s) })
+const server = createServer({ onChange: (s) => { send('state', s); approvalKeys(s.approvals[0]) }, onSignal: (s) => send('signal', s) })
+
+// Global keys exist only while an approval waits, so they never steal these combos the rest of the time.
+// The window itself never takes focus: Enter typed into a terminal must not approve anything.
+const KEYS = { 'CommandOrControl+Alt+Y': 'allow', 'CommandOrControl+Alt+N': 'deny' }
+let keysFor = null
+function approvalKeys(approval) {
+  const id = approval?.id || null
+  if (id === keysFor) return
+  for (const k of Object.keys(KEYS)) globalShortcut.unregister(k)
+  keysFor = id
+  if (!id) return
+  for (const [k, behavior] of Object.entries(KEYS)) {
+    globalShortcut.register(k, () => { send('decided-by-key', behavior); server.decide(id, behavior) })
+  }
+}
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json')
 const prefs = () => { try { return JSON.parse(fs.readFileSync(prefsFile(), 'utf8')) } catch { return {} } }
@@ -138,6 +153,6 @@ else {
     }
     askToConnect()
   })
-  app.on('before-quit', () => { stopMedia?.(); server.close() }) // open approvals go back to the terminal prompt
+  app.on('before-quit', () => { stopMedia?.(); globalShortcut.unregisterAll(); server.close() }) // open approvals go back to the terminal prompt
   app.on('window-all-closed', () => app.quit())
 }
