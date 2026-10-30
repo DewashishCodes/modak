@@ -6,7 +6,7 @@ const listen = (channel) => (cb) => {
   return () => ipcRenderer.removeListener(channel, fn)
 }
 
-contextBridge.exposeInMainWorld('peninsula', {
+contextBridge.exposeInMainWorld('modak', {
   setHover: (over) => ipcRenderer.send('pill-hover', over),
   getState: () => ipcRenderer.invoke('get-state'),
   onState: listen('state'),

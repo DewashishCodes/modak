@@ -3,7 +3,7 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const { describe, detail, clip, preview, outputTail, askLine } = require('./describe')
 
-const HOOK_PATH = '/peninsula/hook'
+const HOOK_PATH = '/modak/hook'
 const MAX_BODY = 1024 * 1024
 
 // Receives Claude Code HTTP hooks, keeps per-session state, and holds PermissionRequest
@@ -130,7 +130,7 @@ function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
       try {
         if (!handle(ev, res)) reply(res)
       } catch (err) {
-        console.error('[peninsula] hook error', err) // never block Claude Code on our bug
+        console.error('[modak] hook error', err) // never block Claude Code on our bug
         reply(res)
       }
     })
@@ -155,7 +155,7 @@ function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
       const s = sessions.get(p.sessionId)
       if (behavior === 'terminal') release(id)
       else {
-        const decision = behavior === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied from Peninsula' }
+        const decision = behavior === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied from Modak' }
         release(id, { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } })
       }
       if (s) { s.status = 'working'; s.activity = behavior === 'deny' ? 'Denied' : p.activity }

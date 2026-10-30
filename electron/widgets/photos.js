@@ -18,7 +18,7 @@ function listPhotos(dir) {
   }
 }
 
-// Maps peninsula-photo://img/<name> to a file in the folder; refuses anything that escapes it.
+// Maps modak-photo://img/<name> to a file in the folder; refuses anything that escapes it.
 function resolvePhoto(dir, url) {
   const name = decodeURIComponent(new URL(url).pathname.replace(/^\//, ''))
   const file = path.resolve(dir, name)
