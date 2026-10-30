@@ -17,10 +17,8 @@ export function NowPlaying() {
   const has = m?.title
   return (
     <div className="tile small">
-      <div className="tile-label"><Music size={13} />{has ? appName(m.app) : 'Now playing'}</div>
-      <div className="tile-main clip" title={has ? `${m.title} · ${m.artist}` : ''}>{has ? m.title : 'Nothing playing'}</div>
       <div className="media-row">
-        <span className="tile-sub clip">{has ? m.artist : ''}</span>
+        <span className="tile-label"><Music size={13} />{has ? appName(m.app) : 'Now playing'}</span>
         {has && (
           <span className="media-btns">
             <button onClick={() => api.media('prev')} aria-label="Previous"><Prev size={12} /></button>
@@ -28,6 +26,10 @@ export function NowPlaying() {
             <button onClick={() => api.media('next')} aria-label="Next"><Next size={12} /></button>
           </span>
         )}
+      </div>
+      <div>
+        <div className="tile-main clip" title={has ? `${m.title} · ${m.artist}` : ''}>{has ? m.title : 'Nothing playing'}</div>
+        <div className="tile-sub clip">{has ? m.artist : 'Play something in any app'}</div>
       </div>
     </div>
   )
