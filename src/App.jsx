@@ -1,66 +1,112 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import Mascot from './Mascot.jsx'
+import { chime } from './chime.js'
 
 const spring = { type: 'spring', stiffness: 400, damping: 30 }
+const DONE_FLASH_MS = 5000
+const api = window.peninsula
 
-// shortcut: spike-only fps readout so the user can judge smoothness without DevTools, remove in M1
-function useFps() {
-  const [fps, setFps] = useState(0)
+function usePeninsula() {
+  const [state, setState] = useState({ sessions: [], approvals: [] })
+  const [flash, setFlash] = useState(null) // session id that just finished
+  const timer = useRef()
+
   useEffect(() => {
-    let frames = 0, last = performance.now(), id
-    const tick = (now) => {
-      frames++
-      if (now - last >= 500) { setFps(Math.round((frames * 1000) / (now - last))); frames = 0; last = now }
-      id = requestAnimationFrame(tick)
-    }
-    id = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(id)
+    if (!api) return
+    api.getState().then(setState)
+    const offState = api.onState(setState)
+    const offSignal = api.onSignal((s) => {
+      if (s.type !== 'done') return
+      chime()
+      setFlash(s.sessionId)
+      clearTimeout(timer.current)
+      timer.current = setTimeout(() => setFlash(null), DONE_FLASH_MS)
+    })
+    return () => { offState(); offSignal(); clearTimeout(timer.current) }
   }, [])
-  return fps
+
+  return { ...state, flash }
 }
 
-function Blob() {
+function Approval({ approval, more }) {
+  const decide = (b) => api?.decide(approval.id, b)
   return (
-    <div className="blob">
-      <div className="eye" />
-      <div className="eye" />
-    </div>
+    <>
+      <div className="card-title">
+        <b>{approval.folder || 'Claude'}</b> wants to use <b>{approval.tool}</b>
+        {more > 0 && <span className="more">+{more} more</span>}
+      </div>
+      <pre className="detail">{approval.detail}</pre>
+      <div className="buttons">
+        <button className="btn allow" onClick={() => decide('allow')}>Allow</button>
+        <button className="btn deny" onClick={() => decide('deny')}>Deny</button>
+        <button className="btn ghost" onClick={() => decide('terminal')}>Answer in terminal</button>
+      </div>
+    </>
   )
 }
 
-export default function App() {
-  const [open, setOpen] = useState(false)
-  const fps = useFps()
+function Sessions({ sessions }) {
+  if (!sessions.length) return <div className="empty">No Claude Code sessions yet. Start <code>claude</code> in a terminal.</div>
+  return sessions.slice(0, 4).map((s) => (
+    <div className="session" key={s.id}>
+      <div className="session-head">
+        <span className={`dot ${s.status}`} />
+        <b>{s.folder || 'session'}</b>
+        <span className="sub">{s.activity}</span>
+      </div>
+      {s.status === 'done' && s.lastAnswer && <div className="answer clamp2">{s.lastAnswer}</div>}
+    </div>
+  ))
+}
 
-  const enter = () => { window.peninsula?.setHover(true); setOpen(true) }
-  const leave = () => { window.peninsula?.setHover(false); setOpen(false) }
+export default function App() {
+  const { sessions, approvals, flash } = usePeninsula()
+  const [hover, setHover] = useState(false)
+
+  const approval = approvals[0]
+  const flashed = flash && sessions.find((s) => s.id === flash)
+  const primary = (approval && sessions.find((s) => s.id === approval.sessionId)) || flashed || sessions[0]
+  const view = approval ? 'approval' : flashed ? 'done' : hover ? 'list' : null
+
+  const mood = approval ? 'asking' : flashed ? 'done' : primary?.status === 'done' ? 'idle' : primary?.status || 'idle'
+
+  const enter = () => { api?.setHover(true); setHover(true) }
+  const leave = () => { api?.setHover(false); setHover(false) }
 
   return (
     <motion.div
       layout
       transition={spring}
       className="pill"
-      style={{ width: open ? 440 : 220, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }}
+      style={{ width: view ? 440 : 260, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }}
       onMouseEnter={enter}
       onMouseLeave={leave}
     >
       <motion.div layout="position" transition={spring} className="row">
-        <Blob />
-        <span className="title">Peninsula</span>
-        <span className="sub">idle</span>
+        <Mascot mood={mood} />
+        <span className="title">{primary?.folder || 'Peninsula'}</span>
+        <span className="sub">{primary?.activity || 'idle'}</span>
       </motion.div>
-      <AnimatePresence>
-        {open && (
+      <AnimatePresence mode="popLayout">
+        {view && (
           <motion.div
+            key={view + (approval?.id || '')}
             className="body"
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, transition: { duration: 0.08 } }}
             transition={spring}
           >
-            Hover spike. Move the mouse off the pill and it should shrink back with a spring.
-            Clicks outside the pill go to the apps underneath.
-            <div className="sub" style={{ marginTop: 8 }}>{fps} fps</div>
+            {view === 'approval' && <Approval approval={approval} more={approvals.length - 1} />}
+            {view === 'done' && (
+              <>
+                <div className="card-title">Done in <b>{flashed.folder || 'Claude'}</b></div>
+                {flashed.lastAnswer && <div className="answer clamp4">{flashed.lastAnswer}</div>}
+              </>
+            )}
+            {view === 'list' && <Sessions sessions={sessions} />}
           </motion.div>
         )}
       </AnimatePresence>
