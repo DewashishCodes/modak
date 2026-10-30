@@ -11,7 +11,9 @@ async function gitInfo(cwd) {
   if (branch === null) return null
   const [status, log] = await Promise.all([git(cwd, ['status', '--porcelain']), git(cwd, ['log', '-1', '--format=%s%x1f%cr'])])
   const [subject = '', when = ''] = (log || '').split('\x1f')
-  return { branch, changed: status ? status.split('\n').length : 0, subject, when }
+  const files = status ? status.split('\n') : []
+  const count = (re) => files.filter((l) => re.test(l.slice(0, 2))).length
+  return { branch, changed: files.length, added: count(/\?\?|A/), modified: count(/M|R|C|U/), deleted: count(/D/), subject, when }
 }
 
 module.exports = { gitInfo }
