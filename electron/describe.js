@@ -3,6 +3,10 @@ const path = require('node:path')
 const clip = (s, n = 60) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
 const base = (p) => (p ? path.basename(String(p)) : '')
 
+// Codex edits files with apply_patch; its tool_input.command is the patch text.
+const isPatch = (tool) => tool === 'apply_patch'
+const patchFile = (input) => String(input.command || '').match(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/m)?.[1]?.trim() || ''
+
 // One short line saying what a tool call does, for the collapsed pill.
 function describe(tool, input = {}) {
   switch (tool) {
@@ -11,6 +15,8 @@ function describe(tool, input = {}) {
     case 'Write':
     case 'NotebookEdit':
       return `Editing ${base(input.file_path || input.notebook_path)}`
+    case 'apply_patch':
+      return `Editing ${base(patchFile(input))}`
     case 'Read':
       return `Reading ${base(input.file_path)}`
     case 'Bash':
@@ -33,6 +39,7 @@ function describe(tool, input = {}) {
 
 // The detail shown on an approval card: the command, the file, or the raw input.
 function detail(tool, input = {}) {
+  if (isPatch(tool)) return patchFile(input)
   if (input.command) return clip(String(input.command), 400)
   if (input.file_path) return String(input.file_path)
   if (input.url) return String(input.url)
@@ -54,6 +61,10 @@ function preview(tool, input = {}) {
       const e = input.edits?.[0] || {}
       return preview('Edit', { file_path: input.file_path, ...e })
     }
+    case 'apply_patch': {
+      const out = lines(input.command).filter((s) => /^[-+]/.test(s)).map((s) => [s[0], s.slice(1)])
+      return { kind: 'diff', file: base(patchFile(input)), lines: out.slice(0, PREVIEW_LINES) }
+    }
     case 'Write':
       return { kind: 'diff', file: base(input.file_path), lines: lines(input.content).slice(0, PREVIEW_LINES).map((s) => ['+', s]) }
     case 'Bash':
@@ -72,6 +83,7 @@ function outputTail(response) {
 
 // Short question for the slim approval bar: "Allow: git push origin main?"
 function askLine(tool, input = {}) {
+  if (isPatch(tool)) return `edit ${base(patchFile(input))}`
   if (input.command) return clip(String(input.command).split('\n')[0], 56)
   if (input.file_path) return `${tool === 'Read' ? 'read' : 'edit'} ${base(input.file_path)}`
   if (input.url) return `fetch ${clip(String(input.url), 48)}`

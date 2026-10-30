@@ -72,3 +72,17 @@ test('refuses to overwrite a settings file it cannot parse', () => {
   assert.throws(() => install(URL, f))
   assert.equal(fs.readFileSync(f, 'utf8'), '{ broken')
 })
+
+test('Codex: installs forwarder command hooks next to the user\'s, and uninstall restores them', () => {
+  const { installCodex, isCodexInstalled, CODEX_EVENTS } = require('../electron/hooks')
+  const f = tmpFile(userSettings)
+  installCodex(URL, f)
+  installCodex(URL, f)
+  const s = load(f)
+  assert.ok(isCodexInstalled(f))
+  assert.ok(!s.hooks.Notification)
+  for (const e of CODEX_EVENTS) assert.equal(s.hooks[e].filter((g) => g.hooks[0].command?.includes('modak-forward')).length, 1, e)
+  assert.match(s.hooks.Stop.at(-1).hooks[0].command, /^node ".*modak-forward\.js" http:\/\/127\.0\.0\.1:47821\/modak\/hook$/)
+  uninstall(f)
+  assert.deepEqual(load(f), userSettings)
+})

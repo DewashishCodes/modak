@@ -10,7 +10,7 @@ const MAX_BODY = 1024 * 1024
 // responses open until the user decides in the pill.
 // onChange(state) fires after every change; onSignal({ type, sessionId }) fires for one-off moments (done).
 function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
-  const sessions = new Map() // session_id -> { id, cwd, folder, status, activity, lastAnswer, updatedAt }
+  const sessions = new Map() // session_id -> { id, agent, cwd, folder, status, activity, lastAnswer, updatedAt }
   const pending = new Map() // approval id -> { id, sessionId, tool, detail, createdAt, res }
   let allowedHosts = []
 
@@ -40,7 +40,7 @@ function createServer({ onChange = () => {}, onSignal = () => {} } = {}) {
   function touch(ev) {
     let s = sessions.get(ev.session_id)
     if (!s) {
-      s = { id: ev.session_id, cwd: ev.cwd || '', status: 'idle', activity: '', lastAnswer: '', preview: null }
+      s = { id: ev.session_id, agent: ev.modak_agent === 'codex' ? 'codex' : 'claude', cwd: ev.cwd || '', status: 'idle', activity: '', lastAnswer: '', preview: null }
       sessions.set(s.id, s)
     }
     if (ev.cwd) { s.cwd = ev.cwd; s.folder = path.basename(ev.cwd) }

@@ -122,3 +122,33 @@ test('rejects wrong content type, wrong host and wrong path', async () => {
   const r = await fetch(`http://127.0.0.1:${port}/other`, { method: 'POST' })
   assert.equal(r.status, 404)
 })
+
+const { spawn } = require('node:child_process')
+const forward = (event) => new Promise((resolve) => {
+  const p = spawn(process.execPath, [require.resolve('../electron/modak-forward.js'), `http://127.0.0.1:${port}${HOOK_PATH}`])
+  let out = ''
+  p.stdout.on('data', (c) => (out += c))
+  p.on('close', (code) => resolve({ code, out }))
+  p.stdin.end(typeof event === 'string' ? event : JSON.stringify(event))
+})
+
+test('Codex forwarder: tags the session, prints {} for no decision, relays an allow', async () => {
+  const patch = '*** Begin Patch\n*** Update File: src/app.py\n@@\n-x = 1\n+x = 2\n*** End Patch'
+  assert.deepEqual(await forward(ev('PreToolUse', { tool_name: 'apply_patch', tool_input: { command: patch } })), { code: 0, out: '{}' })
+  assert.equal(last.sessions[0].agent, 'codex')
+  assert.equal(last.sessions[0].activity, 'Editing app.py')
+  assert.deepEqual(last.sessions[0].preview, { kind: 'diff', file: 'app.py', lines: [['-', 'x = 1'], ['+', 'x = 2']] })
+
+  const p = forward(ev('PermissionRequest', { tool_name: 'apply_patch', tool_input: { command: patch } }))
+  await waitFor(() => last?.approvals.length === 1)
+  assert.equal(last.approvals[0].ask, 'edit app.py')
+  srv.decide(last.approvals[0].id, 'allow')
+  const r = await p
+  assert.deepEqual(JSON.parse(r.out), { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow' } } })
+})
+
+test('Codex forwarder answers {} at once when Modak is not running or input is junk', async () => {
+  assert.deepEqual(await forward('not json'), { code: 0, out: '{}' })
+  await srv.close()
+  assert.deepEqual(await forward(ev('Stop')), { code: 0, out: '{}' })
+})

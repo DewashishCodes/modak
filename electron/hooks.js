@@ -7,7 +7,14 @@ const EVENTS = ['SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 
 const MARK = '/modak/' // every hook URL we add contains this, so uninstall touches only ours
 const LEGACY_MARK = '/peninsula/' // the app's old name; still ours so a reinstall replaces those entries
 
-const ours = (h) => h?.type === 'http' && (String(h.url || '').includes(MARK) || String(h.url || '').includes(LEGACY_MARK))
+// Codex only runs command hooks, so for it we install a tiny script that forwards each event to our server.
+const CODEX_HOOKS = path.join(os.homedir(), '.codex', 'hooks.json')
+const CODEX_EVENTS = EVENTS.filter((e) => e !== 'Notification') // Codex has no Notification event
+const FORWARDER = path.join(__dirname, 'modak-forward.js').replace(/\\/g, '/') // forward slashes work in cmd, PowerShell and bash
+
+const ours = (h) =>
+  (h?.type === 'http' && (String(h.url || '').includes(MARK) || String(h.url || '').includes(LEGACY_MARK))) ||
+  (h?.type === 'command' && String(h.command || '').includes('modak-forward'))
 
 function read(file) {
   if (!fs.existsSync(file)) return {}
@@ -39,25 +46,30 @@ function strip(settings) {
   return settings
 }
 
-function isInstalled(file = SETTINGS) {
+function isInstalled(file = SETTINGS, events = EVENTS) {
   try {
     const hooks = read(file).hooks || {}
-    return EVENTS.every((e) => (hooks[e] || []).some((g) => g?.hooks?.some(ours)))
+    return events.every((e) => (hooks[e] || []).some((g) => g?.hooks?.some(ours)))
   } catch {
     return false
   }
 }
 
-function install(url, file = SETTINGS) {
+function install(url, file = SETTINGS, events = EVENTS, handler = (timeout) => ({ type: 'http', url, timeout })) {
   const settings = strip(read(file))
   settings.hooks ||= {}
-  for (const event of EVENTS) {
+  for (const event of events) {
     // A held approval may wait for the user; everything else must answer fast or Claude moves on.
     const timeout = event === 'PermissionRequest' ? 600 : 5
-    ;(settings.hooks[event] ||= []).push({ hooks: [{ type: 'http', url, timeout }] })
+    ;(settings.hooks[event] ||= []).push({ hooks: [handler(timeout)] })
   }
   write(file, settings)
 }
+
+// shortcut: needs `node` on PATH, ship the forwarder with ELECTRON_RUN_AS_NODE when packaging
+const installCodex = (url, file = CODEX_HOOKS) =>
+  install(url, file, CODEX_EVENTS, (timeout) => ({ type: 'command', command: `node "${FORWARDER}" ${url}`, timeout }))
+const isCodexInstalled = (file = CODEX_HOOKS) => isInstalled(file, CODEX_EVENTS)
 
 function uninstall(file = SETTINGS) {
   write(file, strip(read(file)))
@@ -73,4 +85,4 @@ function isStale(url, file = SETTINGS) {
   }
 }
 
-module.exports = { install, uninstall, isInstalled, isStale, SETTINGS, EVENTS }
+module.exports = { install, uninstall, isInstalled, isStale, installCodex, isCodexInstalled, SETTINGS, CODEX_HOOKS, EVENTS, CODEX_EVENTS }
