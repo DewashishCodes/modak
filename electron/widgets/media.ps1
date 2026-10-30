@@ -28,9 +28,26 @@ if ($Mode -ne 'watch') {
 }
 
 $propsType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]
+$null = [Windows.Storage.Streams.IRandomAccessStreamWithContentType, Windows.Storage.Streams, ContentType = WindowsRuntime]
+$streamType = [Windows.Storage.Streams.IRandomAccessStreamWithContentType]
+
+# Album art as a data URL; only fetched when the track changes.
+function Get-Art($props) {
+  try {
+    if (-not $props.Thumbnail) { return '' }
+    $ras = Await ($props.Thumbnail.OpenReadAsync()) $streamType
+    $ms = New-Object System.IO.MemoryStream
+    [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($ras).CopyTo($ms)
+    $type = if ($ras.ContentType) { $ras.ContentType } else { 'image/png' }
+    return "data:$type;base64," + [Convert]::ToBase64String($ms.ToArray())
+  } catch { return '' }
+}
+
 $last = ''
+$artKey = ''
+$art = ''
 while ($true) {
-  $out = @{ playing = $false; title = ''; artist = ''; app = '' }
+  $out = @{ playing = $false; title = ''; artist = ''; app = ''; art = '' }
   try {
     $s = $mgr.GetCurrentSession()
     if ($s) {
@@ -39,6 +56,9 @@ while ($true) {
       $out.artist = $p.Artist
       $out.app = $s.SourceAppUserModelId
       $out.playing = $s.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing'
+      $key = "$($p.Title)|$($p.Artist)"
+      if ($key -ne $artKey) { $artKey = $key; $art = Get-Art $p }
+      $out.art = $art
     }
   } catch {}
   $json = $out | ConvertTo-Json -Compress
