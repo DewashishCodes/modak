@@ -1,0 +1,24 @@
+{
+  "name": "peninsula",
+  "version": "0.0.1",
+  "private": true,
+  "description": "A little peninsula at the top of your Windows screen for Claude Code",
+  "main": "electron/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "motion": "^14.8.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.1.0",
+    "vite": "^8.3.5"
+  }
+}
