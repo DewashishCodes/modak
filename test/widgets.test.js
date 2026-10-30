@@ -29,6 +29,20 @@ test('usage sums today once per message and reads appended lines incrementally',
   assert.equal(u.hours.reduce((a, b) => a + b), 12)
 })
 
+test('photos lists images only and never resolves outside the folder', () => {
+  const { listPhotos, resolvePhoto } = require('../electron/widgets/photos')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pen-photos-'))
+  fs.writeFileSync(path.join(dir, 'a.jpg'), 'x')
+  fs.writeFileSync(path.join(dir, 'b.PNG'), 'x')
+  fs.writeFileSync(path.join(dir, 'notes.txt'), 'x')
+  assert.deepEqual(listPhotos(dir).sort(), ['a.jpg', 'b.PNG'])
+  assert.equal(resolvePhoto(dir, 'peninsula-photo://img/a.jpg'), path.join(dir, 'a.jpg'))
+  assert.equal(resolvePhoto(dir, 'peninsula-photo://img/my%20cat.jpg'), path.join(dir, 'my cat.jpg'))
+  assert.equal(resolvePhoto(dir, 'peninsula-photo://img/..%2F..%2Fsecret.jpg'), null)
+  assert.equal(resolvePhoto(dir, 'peninsula-photo://img/notes.txt'), null)
+  assert.deepEqual(listPhotos(path.join(dir, 'missing')), [])
+})
+
 test('system stats are sane percentages', () => {
   const s = systemStats()
   assert.ok(s.cpu >= 0 && s.cpu <= 100)
