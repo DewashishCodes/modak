@@ -1,6 +1,6 @@
-# Peninsula
+# Modak
 
-A little peninsula at the top of your Windows screen that keeps you in the loop with Claude Code.
+A little modak at the top of your Windows screen that keeps you in the loop with Claude Code.
 
 ## Run
 

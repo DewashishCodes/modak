@@ -1,8 +1,8 @@
 {
-  "name": "peninsula",
+  "name": "modak",
   "version": "0.0.1",
   "private": true,
-  "description": "A little peninsula at the top of your Windows screen for Claude Code",
+  "description": "A little modak at the top of your Windows screen for Claude Code",
   "main": "electron/main.js",
   "type": "commonjs",
   "scripts": {
