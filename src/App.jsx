@@ -143,7 +143,7 @@ export default function App() {
         >
           {view === 'notch' && (
             <div className="notch">
-              <Mascot mood={status} size={26} loveSignal={love} />
+              <Mascot mood={status} size={30} loveSignal={love} />
               {focus.running && (
                 <span className="notch-focus">
                   <Ring value={focus.progress} size={16} stroke={2.5} color="#ff9f43" />
@@ -159,7 +159,7 @@ export default function App() {
             <div className="bar-row">
               <span className="done-badge"><Check size={13} /></span>
               <span className="ask clip"><b>Done</b> <span className="muted">in {flashed.folder}</span> {flashed.lastAnswer && <span className="muted">· {flashed.lastAnswer}</span>}</span>
-              <Mascot mood="done" size={26} />
+              <Mascot mood="done" size={30} />
             </div>
           )}
 
