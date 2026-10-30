@@ -1,12 +1,16 @@
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, globalShortcut } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, globalShortcut, protocol, net, shell } = require('electron')
+const { pathToFileURL } = require('node:url')
 const fs = require('node:fs')
 const path = require('node:path')
 const { createServer, HOOK_PATH } = require('./server')
 const hooks = require('./hooks')
-const { watchMedia, mediaControl } = require('./widgets/media')
 const { systemStats } = require('./widgets/system')
 const { gitInfo } = require('./widgets/git')
 const { createUsage } = require('./widgets/usage')
+const { listPhotos, resolvePhoto } = require('./widgets/photos')
+
+// Photos are served through our own scheme so the renderer never gets general file:// access.
+protocol.registerSchemesAsPrivileged([{ scheme: 'peninsula-photo', privileges: { standard: true, secure: true } }])
 
 // Big enough for the fully expanded pill; the window never resizes, only the pill inside animates.
 const WIN_W = 1040
@@ -15,7 +19,7 @@ const WIN_H = 480
 const PORT = 47821
 const HOOK_URL = `http://127.0.0.1:${PORT}${HOOK_PATH}`
 
-let win, tray, stopMedia
+let win, tray
 const send = (channel, data) => win?.webContents.send(channel, data)
 const server = createServer({ onChange: (s) => { send('state', s); approvalKeys(s.approvals[0]) }, onSignal: (s) => send('signal', s) })
 
@@ -126,14 +130,21 @@ ipcMain.handle('get-state', () => server.state())
 // Dashboard widgets: polled by the renderer only while the dashboard is open.
 const usageToday = createUsage()
 ipcMain.handle('widgets', async (_e, cwd) => ({ sys: systemStats(), git: await gitInfo(cwd), usage: usageToday() }))
-ipcMain.on('media', (_e, action) => mediaControl(action))
 
-const settings = () => ({ connected: hooks.isInstalled(), autostart: app.getLoginItemSettings().openAtLogin, sound: prefs().sound !== false })
+const photosDir = () => prefs().photosDir || path.join(app.getPath('pictures'), 'Peninsula')
+ipcMain.handle('photos', () => listPhotos(photosDir()).map((n) => `peninsula-photo://img/${encodeURIComponent(n)}`))
+ipcMain.on('photos-open', () => { fs.mkdirSync(photosDir(), { recursive: true }); shell.openPath(photosDir()) })
+
+const settings = () => ({ photosDir: photosDir(), connected: hooks.isInstalled(), autostart: app.getLoginItemSettings().openAtLogin, sound: prefs().sound !== false })
 ipcMain.handle('get-settings', settings)
 ipcMain.handle('set-setting', (_e, key, value) => {
   if (key === 'connected') value ? connect() : disconnect()
   if (key === 'autostart') app.setLoginItemSettings({ openAtLogin: !!value })
   if (key === 'sound') savePrefs({ sound: !!value })
+  if (key === 'photosDir') {
+    const picked = dialog.showOpenDialogSync({ title: 'Folder with your favourite photos', defaultPath: photosDir(), properties: ['openDirectory'] })
+    if (picked?.[0]) savePrefs({ photosDir: picked[0] })
+  }
   refreshTray()
   return settings()
 })
@@ -141,8 +152,12 @@ ipcMain.handle('set-setting', (_e, key, value) => {
 if (!app.requestSingleInstanceLock()) app.quit()
 else {
   app.whenReady().then(async () => {
+    fs.mkdirSync(photosDir(), { recursive: true })
+    protocol.handle('peninsula-photo', (req) => {
+      const file = resolvePhoto(photosDir(), req.url)
+      return file ? net.fetch(pathToFileURL(file).toString()) : new Response('not found', { status: 404 })
+    })
     createWindow()
-    stopMedia = watchMedia((m) => send('media', m))
     tray = new Tray(trayIcon())
     refreshTray()
     try {
@@ -153,6 +168,6 @@ else {
     }
     askToConnect()
   })
-  app.on('before-quit', () => { stopMedia?.(); globalShortcut.unregisterAll(); server.close() }) // open approvals go back to the terminal prompt
+  app.on('before-quit', () => { globalShortcut.unregisterAll(); server.close() }) // open approvals go back to the terminal prompt
   app.on('window-all-closed', () => app.quit())
 }

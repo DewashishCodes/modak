@@ -14,8 +14,8 @@ contextBridge.exposeInMainWorld('peninsula', {
   onDecidedByKey: listen('decided-by-key'),
   decide: (id, behavior) => ipcRenderer.send('decide', id, behavior),
   widgets: (cwd) => ipcRenderer.invoke('widgets', cwd),
-  onMedia: listen('media'),
-  media: (action) => ipcRenderer.send('media', action),
+  photos: () => ipcRenderer.invoke('photos'),
+  openPhotos: () => ipcRenderer.send('photos-open'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
 })
