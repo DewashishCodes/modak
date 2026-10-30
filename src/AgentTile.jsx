@@ -34,7 +34,7 @@ export default function AgentTile({ sessions, index, onCycle, mood, loveSignal }
           <div className="agent-name">
             <span className={`dot ${s.status}`} />
             <b>{s.folder || 'session'}</b>
-            <span className="muted">Claude Code</span>
+            <span className="muted">{s.agent === 'codex' ? 'Codex' : 'Claude Code'}</span>
             {sessions.length > 1 && (
               <button className="counter" onClick={onCycle} title="Next session">{index + 1}/{sessions.length}</button>
             )}

@@ -96,11 +96,23 @@ function disconnect() {
   refreshTray()
 }
 
+// Codex is opt-in from the tray or settings only, no startup dialog.
+function setCodex(on) {
+  try { on ? hooks.installCodex(HOOK_URL) : hooks.uninstall(hooks.CODEX_HOOKS) } catch (err) {
+    dialog.showErrorBox('Modak', `Could not update ${hooks.CODEX_HOOKS}.
+It may not be valid JSON, so it was left untouched.
+
+${err.message}`)
+  }
+  refreshTray()
+}
+
 function refreshTray(status = 'Watching Claude Code') {
   const connected = hooks.isInstalled()
   tray.setToolTip(`Modak: ${connected ? status : 'not connected'}`)
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Connected to Claude Code', type: 'checkbox', checked: connected, click: () => (connected ? disconnect() : connect()) },
+    { label: 'Connected to Codex', type: 'checkbox', checked: hooks.isCodexInstalled(), click: (i) => setCodex(i.checked) },
     { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
     { type: 'separator' },
     { label: 'Quit Modak', click: () => app.quit() },
@@ -136,10 +148,11 @@ const photosDir = () => prefs().photosDir || path.join(app.getPath('pictures'), 
 ipcMain.handle('photos', () => listPhotos(photosDir()).map((n) => `modak-photo://img/${encodeURIComponent(n)}`))
 ipcMain.on('photos-open', () => { fs.mkdirSync(photosDir(), { recursive: true }); shell.openPath(photosDir()) })
 
-const settings = () => ({ photosDir: photosDir(), connected: hooks.isInstalled(), autostart: app.getLoginItemSettings().openAtLogin, sound: prefs().sound !== false })
+const settings = () => ({ photosDir: photosDir(), connected: hooks.isInstalled(), codex: hooks.isCodexInstalled(), autostart: app.getLoginItemSettings().openAtLogin, sound: prefs().sound !== false })
 ipcMain.handle('get-settings', settings)
 ipcMain.handle('set-setting', (_e, key, value) => {
   if (key === 'connected') value ? connect() : disconnect()
+  if (key === 'codex') setCodex(!!value)
   if (key === 'autostart') app.setLoginItemSettings({ openAtLogin: !!value })
   if (key === 'sound') savePrefs({ sound: !!value })
   if (key === 'photosDir') {

@@ -5,7 +5,7 @@ if (!window.modak) {
   const sessions = [
     { id: 'a', folder: 'webshop', cwd: '.', status: 'working', activity: 'Editing checkout.ts', updatedAt: 2,
       preview: { kind: 'diff', file: 'checkout.ts', lines: [['-', 'const total = 0'], ['+', 'const total = sum(items)'], ['+', 'const tax = total * TAX_RATE']] } },
-    { id: 'b', folder: 'api-server', cwd: '.', status: 'working', activity: 'Running npm test', updatedAt: 1,
+    { id: 'b', agent: 'codex', folder: 'api-server', cwd: '.', status: 'working', activity: 'Running npm test', updatedAt: 1,
       preview: { kind: 'term', command: 'npm test', output: ['> api-server@1.0.0 test', '✓ auth (12 ms)', '✓ orders (40 ms)', 'Tests: 46 passed, 46 total'] } },
   ]
   const approvals = q.has('approval')
@@ -30,8 +30,8 @@ if (!window.modak) {
     }),
     photos: async () => photos,
     openPhotos: () => console.log('open photos folder'),
-    getSettings: async () => ({ connected: true, autostart: false, sound: true, photosDir: 'C:\\Users\\you\\Pictures\\Modak' }),
-    setSetting: async (k, v) => ({ connected: true, autostart: false, sound: true, photosDir: 'C:\\Users\\you\\Pictures\\Modak', [k]: v }),
+    getSettings: async () => ({ connected: true, codex: false, autostart: false, sound: true, photosDir: 'C:\\Users\\you\\Pictures\\Modak' }),
+    setSetting: async (k, v) => ({ connected: true, codex: false, autostart: false, sound: true, photosDir: 'C:\\Users\\you\\Pictures\\Modak', [k]: v }),
   }
   if (q.has('done')) setTimeout(() => subs.signal.forEach((cb) => cb({ type: 'done', sessionId: 'b' })), 1500) // after the app subscribes
 }

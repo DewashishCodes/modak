@@ -233,6 +233,7 @@ export function Settings({ settings, onChange }) {
   return (
     <div className="settings">
       <Toggle label="Connected to Claude Code" hint="Modak's hooks in ~/.claude/settings.json" on={settings.connected} onChange={(v) => onChange('connected', v)} />
+      <Toggle label="Connected to Codex" hint="A forwarder hook in ~/.codex/hooks.json" on={settings.codex} onChange={(v) => onChange('codex', v)} />
       <Toggle label="Sound" hint="Chime when work is done" on={settings.sound} onChange={(v) => onChange('sound', v)} />
       <Toggle label="Start with Windows" hint="Open Modak when you sign in" on={settings.autostart} onChange={(v) => onChange('autostart', v)} />
       <div className="setting">
