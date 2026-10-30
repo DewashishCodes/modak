@@ -10,7 +10,29 @@ Windows desktop "island" for Claude Code, Electron + React. Formerly called Peni
 - Browser preview with fake data: http://localhost:5280/ (`?approval`, `?done`, `?nophotos`), from `src/mock.js` (dev only).
 - If Electron "failed to install correctly": `node node_modules/electron/install.js` (npm 12 skipped its download once).
 
-## Code map
+## Native build (branch winui-prototype, replacing Electron)
+
+C# WinUI 3 in `native/`: the pill, its shadow, rim, view reveal and Modak's frames all animate in the Windows compositor, so the app does no work per frame (idle about 0% CPU, 90 MB).
+
+- Build: `dotnet build -c Release native/App` (needs the .NET 8 SDK), run `native/App/bin/Release/net8.0-windows10.0.19041.0/win-x64/Modak.exe`.
+- Tests: `dotnet test native/Tests` (Core: describe, server, hooks, forwarder, widgets, prefs).
+- Test runs: `Modak.exe --second --port 47900 [--open [settings]]` puts it on the second display, away from real sessions on 47821, and pins the dashboard open. Always test on the second display and close it after.
+- Trace: set `MODAK_TRACE=1`, read `%TEMP%\modak-trace.log`; crashes go to `%TEMP%\modak-crash.log`.
+- Mascot sprites: `node_modules/electron/dist/electron.exe scripts/modak-sprites.js` re-renders `native/App/Assets/modak` from `src/modak.generated.js`.
+- Codex hook is `Modak.exe --forward <url>` (no node needed).
+
+| File | What |
+|---|---|
+| `native/Core/Hub.cs`, `HookServer.cs` | Session state and held approvals; raw-socket HTTP (HttpListener cannot bind 127.0.0.1 without admin) |
+| `native/Core/Describe.cs`, `Hooks.cs`, `Forwarder.cs`, `Widgets.cs`, `Prefs.cs` | Ports of describe.js, hooks.js, modak-forward.js, the widgets, prefs and the focus timer |
+| `native/App/Island.cs` | Window, composition pill, view swapping, region (click-through), hover, ghost, hotkeys |
+| `native/App/Views.cs`, `Dashboard.cs`, `Tiles.cs` | Notch, bars, preview box, dashboard, tiles, settings |
+| `native/App/Mascot.cs` | Sprite mascot with the same moods and rest/blink rules |
+| `native/App/Tray.cs`, `Native.cs`, `Bits.cs`, `Ui.cs` | Tray and connections, Win32 interop, chime/dialogs/ring, design tokens |
+
+WinUI gotchas met on the way (all commented in code): no templated controls (XamlControlsResources cannot load without App.xaml, so buttons are plain Borders); `IsAlwaysOnTop` only sticks after `Show`; transparency needs the DWM frame extended; layered click-through turns the window black, so a window region is used; a LayerVisual shadow renders nothing; Windows draws a thin line on the window edge, so the window sits 10px above the screen; `Window.DispatcherQueue` throws off the UI thread; unreferenced DispatcherQueueTimers get collected and stop.
+
+## Code map (Electron)
 
 | File | What |
 |---|---|

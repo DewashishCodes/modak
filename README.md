@@ -38,6 +38,19 @@ On first launch Modak asks to add its hooks to `~/.claude/settings.json` (a back
 
 To look at the UI without Electron, open http://localhost:5280/ in a browser while `npm run dev` runs. A mock fills in sample sessions. Add `?approval`, `?done` or `?nophotos` to see those states.
 
+## Native build (in progress)
+
+The `winui-prototype` branch has a native C# WinUI 3 version in `native/`. Every animation runs in the Windows compositor, so it stays smooth and light (about 0% CPU idle, 90 MB). It needs the .NET 8 SDK:
+
+```
+dotnet build -c Release native/App
+native\Appin\Release
+et8.0-windows10.0.19041.0\win-x64\Modak.exe
+dotnet test native/Tests
+```
+
+It uses the same hook URL as the Electron build, so either one can run (not both at once). Its Codex hook is `Modak.exe --forward`, so Codex no longer needs `node`.
+
 ## How it works
 
 Claude Code supports HTTP hooks, so there is no hook script. Modak listens on `127.0.0.1:47821/modak/hook`:
