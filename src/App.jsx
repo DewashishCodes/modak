@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import Mascot from './Mascot.jsx'
 import AgentTile from './AgentTile.jsx'
 import Preview from './Preview.jsx'
-import { NowPlaying, Clock, Focus, Git, Usage, System, Settings, Ring } from './widgets.jsx'
+import { Photos, Clock, Focus, Git, Usage, System, Settings, Ring } from './widgets.jsx'
 import { useFocus, mmss } from './focus.js'
 import { Gear, Sound, Mute, Check, Back, Terminal } from './icons.jsx'
 import { chime } from './chime.js'
@@ -182,7 +182,7 @@ export default function App() {
               ) : (
                 <div className="grid">
                   <AgentTile sessions={sessions} index={i} onCycle={() => setIndex((i + 1) % sessions.length)} mood={status} loveSignal={love} />
-                  <NowPlaying />
+                  <Photos />
                   <Clock />
                   <Focus focus={focus} />
                   <Git git={widgets.git} />
