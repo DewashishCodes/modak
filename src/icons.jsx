@@ -9,7 +9,7 @@ export const Play = (p) => <Svg {...p} fill="currentColor"><path d="M5 3.5v9l7-4
 export const Pause = (p) => <Svg {...p} fill="currentColor"><rect x="4" y="3.5" width="2.6" height="9" rx="1" stroke="none" /><rect x="9.4" y="3.5" width="2.6" height="9" rx="1" stroke="none" /></Svg>
 export const Next = (p) => <Svg {...p}><path d="M4 4l5 4-5 4zM12 4v8" /></Svg>
 export const Prev = (p) => <Svg {...p}><path d="M12 4L7 8l5 4zM4 4v8" /></Svg>
-export const Gear = (p) => <Svg {...p}><circle cx="8" cy="8" r="2.2" /><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7L3.6 3.6" /></Svg>
+export const Gear = (p) => <Svg {...p}><circle cx="8" cy="8" r="2" /><path d="M6.9 1.8h2.2l.4 1.7 1.3.7 1.6-.6 1.1 1.9-1.3 1.2v1.5l1.3 1.2-1.1 1.9-1.6-.6-1.3.7-.4 1.7H6.9l-.4-1.7-1.3-.7-1.6.6-1.1-1.9 1.3-1.2V7.2L2.5 6l1.1-1.9 1.6.6 1.3-.7z" /></Svg>
 export const Sound = (p) => <Svg {...p}><path d="M3 6.2h2.2L8.5 3.5v9L5.2 9.8H3z" /><path d="M11 5.5a3.5 3.5 0 010 5M12.8 3.8a6 6 0 010 8.4" /></Svg>
 export const Mute = (p) => <Svg {...p}><path d="M3 6.2h2.2L8.5 3.5v9L5.2 9.8H3z" /><path d="M11 6l3.5 4M14.5 6L11 10" /></Svg>
 export const Branch = (p) => <Svg {...p}><circle cx="4.5" cy="3.5" r="1.5" /><circle cx="4.5" cy="12.5" r="1.5" /><circle cx="11.5" cy="5.5" r="1.5" /><path d="M4.5 5v6M11.5 7c0 3-7 2-7 4" /></Svg>
