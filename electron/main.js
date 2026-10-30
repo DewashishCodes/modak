@@ -10,7 +10,7 @@ const { createUsage } = require('./widgets/usage')
 const { listPhotos, resolvePhoto } = require('./widgets/photos')
 
 // Photos are served through our own scheme so the renderer never gets general file:// access.
-protocol.registerSchemesAsPrivileged([{ scheme: 'peninsula-photo', privileges: { standard: true, secure: true } }])
+protocol.registerSchemesAsPrivileged([{ scheme: 'modak-photo', privileges: { standard: true, secure: true } }])
 
 // Big enough for the fully expanded pill; the window never resizes, only the pill inside animates.
 const WIN_W = 1040
@@ -85,38 +85,39 @@ function connect() {
     hooks.install(HOOK_URL)
     savePrefs({ declined: false })
   } catch (err) {
-    dialog.showErrorBox('Peninsula', `Could not update ${hooks.SETTINGS}.\nIt may not be valid JSON, so it was left untouched.\n\n${err.message}`)
+    dialog.showErrorBox('Modak', `Could not update ${hooks.SETTINGS}.\nIt may not be valid JSON, so it was left untouched.\n\n${err.message}`)
   }
   refreshTray()
 }
 
 function disconnect() {
-  try { hooks.uninstall() } catch (err) { dialog.showErrorBox('Peninsula', err.message) }
+  try { hooks.uninstall() } catch (err) { dialog.showErrorBox('Modak', err.message) }
   savePrefs({ declined: true })
   refreshTray()
 }
 
 function refreshTray(status = 'Watching Claude Code') {
   const connected = hooks.isInstalled()
-  tray.setToolTip(`Peninsula: ${connected ? status : 'not connected'}`)
+  tray.setToolTip(`Modak: ${connected ? status : 'not connected'}`)
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Connected to Claude Code', type: 'checkbox', checked: connected, click: () => (connected ? disconnect() : connect()) },
     { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
     { type: 'separator' },
-    { label: 'Quit Peninsula', click: () => app.quit() },
+    { label: 'Quit Modak', click: () => app.quit() },
   ]))
 }
 
 async function askToConnect() {
+  if (hooks.isStale(HOOK_URL)) return connect() // hooks from the Peninsula days: swap to the current URL silently
   if (hooks.isInstalled() || prefs().declined) return
   const { response } = await dialog.showMessageBox({
     type: 'question',
     buttons: ['Connect', 'Not now'],
     defaultId: 0,
     cancelId: 1,
-    title: 'Peninsula',
-    message: 'Connect Peninsula to Claude Code?',
-    detail: `This adds Peninsula's hooks to ${hooks.SETTINGS} (a backup is kept next to it). Your other settings and hooks stay as they are. You can disconnect any time from the tray icon.`,
+    title: 'Modak',
+    message: 'Connect Modak to Claude Code?',
+    detail: `This adds Modak's hooks to ${hooks.SETTINGS} (a backup is kept next to it). Your other settings and hooks stay as they are. You can disconnect any time from the tray icon.`,
   })
   if (response === 0) connect()
   else savePrefs({ declined: true })
@@ -131,8 +132,8 @@ ipcMain.handle('get-state', () => server.state())
 const usageToday = createUsage()
 ipcMain.handle('widgets', async (_e, cwd) => ({ sys: systemStats(), git: await gitInfo(cwd), usage: usageToday() }))
 
-const photosDir = () => prefs().photosDir || path.join(app.getPath('pictures'), 'Peninsula')
-ipcMain.handle('photos', () => listPhotos(photosDir()).map((n) => `peninsula-photo://img/${encodeURIComponent(n)}`))
+const photosDir = () => prefs().photosDir || path.join(app.getPath('pictures'), 'Modak')
+ipcMain.handle('photos', () => listPhotos(photosDir()).map((n) => `modak-photo://img/${encodeURIComponent(n)}`))
 ipcMain.on('photos-open', () => { fs.mkdirSync(photosDir(), { recursive: true }); shell.openPath(photosDir()) })
 
 const settings = () => ({ photosDir: photosDir(), connected: hooks.isInstalled(), autostart: app.getLoginItemSettings().openAtLogin, sound: prefs().sound !== false })
@@ -153,7 +154,7 @@ if (!app.requestSingleInstanceLock()) app.quit()
 else {
   app.whenReady().then(async () => {
     fs.mkdirSync(photosDir(), { recursive: true })
-    protocol.handle('peninsula-photo', (req) => {
+    protocol.handle('modak-photo', (req) => {
       const file = resolvePhoto(photosDir(), req.url)
       return file ? net.fetch(pathToFileURL(file).toString()) : new Response('not found', { status: 404 })
     })
@@ -164,7 +165,7 @@ else {
       await server.listen(PORT)
     } catch (err) {
       refreshTray(`port ${PORT} is busy`)
-      dialog.showErrorBox('Peninsula', `Port ${PORT} is already in use, so Peninsula cannot hear Claude Code.\nIs another copy running?\n\n${err.message}`)
+      dialog.showErrorBox('Modak', `Port ${PORT} is already in use, so Modak cannot hear Claude Code.\nIs another copy running?\n\n${err.message}`)
     }
     askToConnect()
   })
